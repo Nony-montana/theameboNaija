@@ -3,10 +3,15 @@ const app = express();
 const ejs = require('ejs');
 const dotenv = require('dotenv');
 const mongoose = require("mongoose");
+const cors = require("cors");
 app.set('view engine', 'ejs');
 dotenv.config();
 app.use(express.urlencoded({extended:true}));
 app.use(express.json());
+app.use(cors({
+    origin:"http://localhost:5173",
+    credentials:true
+}));
 const UserRouter =require("./routers/user.routes");
 const PostRouter =require("./routers/post.routes");
 app.use('/api/v1', UserRouter)
