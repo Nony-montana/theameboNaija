@@ -9,7 +9,7 @@ dotenv.config();
 app.use(express.urlencoded({limit:"5mb" ,extended:true}));
 app.use(express.json());
 app.use(cors({
-    origin:"http://localhost:5173",
+    origin:"https://amebonaija.vercel.app",
     credentials:true
 }));
 const UserRouter =require("./routers/user.routes");
