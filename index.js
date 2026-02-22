@@ -35,5 +35,5 @@ mongoose.connect(process.env.DATABASE_URI)
     console.log("Failed to connect to DB")
 })
 
-    // origin:"http://localhost:5173",
+    // origin:"http://localhost:5173", 
     // credentials:true
