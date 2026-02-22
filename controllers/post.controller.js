@@ -1,3 +1,4 @@
+const { cloudinary } = require("../config/cloudinary");
 const PostModel = require("../models/post.model");
 
 // =====================
@@ -16,48 +17,52 @@ const generateSlug = (title) => {
 // CREATE A POST
 // =====================
 const createPost = async (req, res) => {
-  const { title, content, category, tags, status } = req.body;
+    const { title, content, category, status, tags, image } = req.body;
 
-  try {
-    const slug = generateSlug(title);
+    try {
+        const slug = generateSlug(title);
 
-    // Check if a post with the same slug already exists
-    const existingPost = await PostModel.findOne({ slug });
-    if (existingPost) {
-      return res.status(400).send({
-        message:
-          "A post with this title already exists, please use a different title",
-      });
+        const existingPost = await PostModel.findOne({ slug });
+        if (existingPost) {
+            return res.status(400).send({
+                message: "A post with this title already exists"
+            });
+        }
+
+        // Upload base64 image to Cloudinary if provided
+        let imageUrl = "";
+        if (image && image.startsWith("data:image")) {
+            const uploadResult = await cloudinary.uploader.upload(image, {
+                folder: "blog-images",
+                transformation: [{ width: 1200, quality: "auto" }]
+            });
+            imageUrl = uploadResult.secure_url;
+        }
+
+        const post = await PostModel.create({
+            title,
+            slug,
+            content,
+            image: imageUrl,
+            category,
+            tags: tags || [],
+            status: status || "draft",
+            author: req.user.id
+        });
+
+        res.status(201).send({
+            message: "Post created successfully",
+            data: post
+        });
+
+    } catch (error) {
+        console.log("CREATE POST ERROR:", error.message);
+        res.status(500).send({
+            message: "Failed to create post",
+            error: error.message
+        });
     }
-
-    // If an image was uploaded, Cloudinary gives us the URL via req.file
-    const image = req.file ? req.file.path : "";
-
-    const post = await PostModel.create({
-      title,
-      slug,
-      content,
-      image,
-      category,
-      tags,
-      status: status || "draft", // default to draft if not provided
-      author: req.user.id,
-      // isApproved defaults to false, so post won't show until admin approves
-    });
-
-    res.status(201).send({
-      message: "Post created successfully",
-      data: post,
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      message: "Failed to create post",
-    });
-  }
-};
-
-// =====================
+};// =====================
 // GET ALL PUBLISHED & APPROVED POSTS
 // =====================
 const getAllPosts = async (req, res) => {
@@ -135,56 +140,62 @@ const getSinglePost = async (req, res) => {
 // UPDATE / EDIT A POST
 // =====================
 const updatePost = async (req, res) => {
-  try {
-    const { slug } = req.params;
+    try {
+        const { slug } = req.params;
+        const { title, image } = req.body;
 
-    const post = await PostModel.findOne({ slug });
+        const post = await PostModel.findOne({ slug });
 
-    if (!post) {
-      return res.status(404).send({ message: "Post not found" });
+        if (!post) {
+            return res.status(404).send({ message: "Post not found" });
+        }
+
+        // Only the author or an admin can edit
+        if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
+            return res.status(403).send({
+                message: "You are not allowed to edit this post",
+            });
+        }
+
+        // If a new base64 image was sent, upload to Cloudinary
+        if (image && image.startsWith("data:image")) {
+            const uploadResult = await cloudinary.uploader.upload(image, {
+                folder: "blog-images",
+                transformation: [{ width: 1200, quality: "auto" }]
+            });
+            req.body.image = uploadResult.secure_url;
+        }
+
+        // If title is being changed, regenerate the slug
+        if (title) {
+            req.body.slug = generateSlug(title);
+        }
+
+        // Reset approval so admin can review again
+        req.body.isApproved = false;
+        req.body.approvedBy = null;
+        req.body.approvedAt = null;
+        req.body.status = "pending";
+
+        const updatedPost = await PostModel.findOneAndUpdate(
+            { slug },
+            req.body,
+            { returnDocument: "after", runValidators: true }
+        );
+
+        res.status(200).send({
+            message: "Post updated successfully, it will be reviewed by an admin before publishing",
+            data: updatedPost,
+        });
+
+    } catch (error) {
+        console.log("UPDATE POST ERROR:", error.message);
+        res.status(500).send({
+            message: "Failed to update post",
+            error: error.message
+        });
     }
-
-    // Only the author or an admin can edit
-    if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res.status(403).send({
-        message: "You are not allowed to edit this post",
-      });
-    }
-
-    // If a new image was uploaded, use the new Cloudinary URL
-    if (req.file) {
-      req.body.image = req.file.path;
-    }
-
-    // If title is being changed, regenerate the slug
-    if (req.body.title) {
-      req.body.slug = generateSlug(req.body.title);
-    }
-
-    // If post is edited, reset approval so admin can review again
-    req.body.isApproved = false;
-    req.body.approvedBy = null;
-    req.body.approvedAt = null;
-    req.body.status = "pending";
-
-    const updatedPost = await PostModel.findOneAndUpdate({ slug }, req.body, {
-      returnDocument: "after",
-      runValidators: true,
-    });
-
-    res.status(200).send({
-      message:
-        "Post updated successfully, it will be reviewed by an admin before publishing",
-      data: updatedPost,
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      message: "Failed to update post",
-    });
-  }
 };
-
 // =====================
 // DELETE A POST
 // =====================
@@ -288,6 +299,30 @@ const rejectPost = async (req, res) => {
     console.log(error);
     res.status(500).send({ message: "Failed to reject post" });
   }
+};
+
+// ADMIN PREVIEW - can see any post regardless of status
+const previewPost = async (req, res) => {
+    try {
+        const { slug } = req.params;
+
+        const post = await PostModel.findOne({ slug })
+            .populate("author", "firstName lastName")
+            .populate("comments.user", "firstName lastName");
+
+        if (!post) {
+            return res.status(404).send({ message: "Post not found" });
+        }
+
+        res.status(200).send({
+            message: "Post fetched successfully",
+            data: post
+        });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).send({ message: "Failed to fetch post" });
+    }
 };
 
 // =====================
@@ -532,6 +567,7 @@ module.exports = {
   updatePost,
   deletePost,
   approvePost,
+  previewPost,
   rejectPost,
   getPendingPosts,
   likePost,

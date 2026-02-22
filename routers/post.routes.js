@@ -17,7 +17,8 @@ const {
     deleteComment,
     searchPosts,
     getTrendingPosts,
-    getMyPosts
+    getMyPosts,
+    previewPost
 } = require("../controllers/post.controller");
 
 
@@ -39,8 +40,8 @@ router.get("/my-posts", verifyUser, getMyPosts);
 // =====================
 
 // Post CRUD
-router.post("/posts", verifyUser, upload.single("image"), createPost);
-router.put("/posts/:slug", verifyUser, upload.single("image"), updatePost);
+router.post("/posts", verifyUser,  createPost);
+router.put("/posts/:slug", verifyUser,  updatePost);
 router.delete("/posts/:slug", verifyUser, deletePost);
 
 // Likes, shares & comments
@@ -52,6 +53,7 @@ router.delete("/posts/:slug/comment/:commentId", verifyUser, deleteComment);
 // Admin only routes
 router.get("/posts/admin/pending", verifyUser, getPendingPosts);
 router.put("/posts/:slug/approve", verifyUser, approvePost);
+router.get("/posts/admin/preview/:slug", verifyUser, previewPost);
 router.put("/posts/:slug/reject", verifyUser, rejectPost);
 
 
