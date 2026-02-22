@@ -41,7 +41,7 @@ router.get("/my-posts", verifyUser, getMyPosts);
 
 // Post CRUD
 router.post("/posts", verifyUser,  createPost);
-router.put("/posts/:slug", verifyUser,  updatePost);
+router.put("/posts/:slug", verifyUser, upload.single("image"), updatePost);
 router.delete("/posts/:slug", verifyUser, deletePost);
 
 // Likes, shares & comments
