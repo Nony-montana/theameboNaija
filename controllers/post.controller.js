@@ -142,7 +142,7 @@ const getSinglePost = async (req, res) => {
 const updatePost = async (req, res) => {
     try {
         const { slug } = req.params;
-        const { title, image } = req.body;
+        const { title, status } = req.body;
 
         const post = await PostModel.findOne({ slug });
 
@@ -157,30 +157,62 @@ const updatePost = async (req, res) => {
             });
         }
 
-        // If a new base64 image was sent, upload to Cloudinary
-        if (image && image.startsWith("data:image")) {
-            const uploadResult = await cloudinary.uploader.upload(image, {
+        // Build a controlled update object instead of spreading req.body directly.
+        // Spreading req.body is dangerous — it allows clients to overwrite any field
+        // on the document (e.g. author, isApproved, roles) by simply sending it in the request.
+        const updateData = {
+            title: title || post.title,
+            content: req.body.content || post.content,
+            category: req.body.category || post.category,
+            // FIX: Respect the status the user chose (draft or pending).
+            // Previously this was hardcoded to "pending", ignoring the user's choice to save as draft.
+            status: status === "draft" ? "draft" : "pending",
+        };
+
+        // FIX: Parse tags sent as a JSON string from the frontend FormData.
+        // Previously used repeated tags[] keys which are unreliable across multer configs.
+        if (req.body.tags) {
+            try {
+                updateData.tags = JSON.parse(req.body.tags);
+            } catch {
+                // Fallback: if someone sends a plain comma-separated string
+                updateData.tags = req.body.tags.split(",").map((t) => t.trim()).filter(Boolean);
+            }
+        }
+
+        // FIX: Handle image as a multer file upload (req.file) instead of base64 (req.body.image).
+        // The frontend sends a file via FormData, not a base64 string, so the old
+        // base64 check never triggered — image updates were silently ignored.
+        if (req.file) {
+            const uploadResult = await cloudinary.uploader.upload(req.file.path, {
                 folder: "blog-images",
-                transformation: [{ width: 1200, quality: "auto" }]
+                transformation: [{ width: 1200, quality: "auto" }],
             });
-            req.body.image = uploadResult.secure_url;
+            updateData.image = uploadResult.secure_url;
         }
 
-        // If title is being changed, regenerate the slug
-        if (title) {
-            req.body.slug = generateSlug(title);
+        // FIX: Only regenerate slug when the title actually changes.
+        // Previously it regenerated the slug on every edit even if the title was unchanged,
+        // and always set it from title even if the title wasn't sent.
+        if (title && title !== post.title) {
+            updateData.slug = generateSlug(title);
         }
 
-        // Reset approval so admin can review again
-        req.body.isApproved = false;
-        req.body.approvedBy = null;
-        req.body.approvedAt = null;
-        req.body.status = "pending";
+        // Reset approval fields so admin can re-review the updated post.
+        // Only do this when the user is actually submitting for review, not saving a draft.
+        if (updateData.status === "pending") {
+            updateData.isApproved = false;
+            updateData.approvedBy = null;
+            updateData.approvedAt = null;
+        }
 
-        const updatedPost = await PostModel.findOneAndUpdate(
-            { slug },
-            req.body,
-            { returnDocument: "after", runValidators: true }
+        // FIX: Query by _id instead of slug, since slug may have just changed above.
+        // Using the old slug to query after it has been updated would still work here
+        // (findOneAndUpdate is atomic), but using _id is clearer and safer.
+        const updatedPost = await PostModel.findByIdAndUpdate(
+            post._id,
+            updateData,
+            { new: true, runValidators: true }
         );
 
         res.status(200).send({
@@ -192,7 +224,7 @@ const updatePost = async (req, res) => {
         console.log("UPDATE POST ERROR:", error.message);
         res.status(500).send({
             message: "Failed to update post",
-            error: error.message
+            error: error.message,
         });
     }
 };
