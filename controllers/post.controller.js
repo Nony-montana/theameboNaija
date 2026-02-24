@@ -560,7 +560,7 @@ module.exports = {
   getAllPosts,
   getSinglePost,
   updatePost,
-  deletePost,
+  // deletePost,
   approvePost,
   previewPost,
   rejectPost,

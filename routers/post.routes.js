@@ -7,7 +7,7 @@ const {
     getAllPosts,
     getSinglePost,
     updatePost,
-    deletePost,
+    // deletePost,
     approvePost,
     rejectPost,
     getPendingPosts,
@@ -42,7 +42,7 @@ router.get("/my-posts", verifyUser, getMyPosts);
 // Post CRUD
 router.post("/posts", verifyUser,  createPost);
 router.put("/posts/:slug", verifyUser, upload.single("image"), updatePost);
-router.delete("/posts/:slug", verifyUser, deletePost);
+// router.delete("/posts/:slug", verifyUser, deletePost);
 
 // Likes, shares & comments
 router.post("/posts/:slug/like", verifyUser, likePost);

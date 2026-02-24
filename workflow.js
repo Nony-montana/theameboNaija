@@ -27,6 +27,8 @@
 
 //modularization✅
 
-//cloudinary
-//nodemailer
+//cloudinary✅
+//nodemailer✅
 //auth and authorization
+//delete comment 
+//delete post

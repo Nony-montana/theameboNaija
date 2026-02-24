@@ -2,7 +2,7 @@ const UserModel = require('../models/user.model');
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
 const { sendEmail } = require('../utils/sendEmail');
-const { welcomeEmail } = require('../email/welcomeEmail');
+const welcomeEmail = require('../email/welcomeEmail');
 
 
 const createUser = async (req, res) => {

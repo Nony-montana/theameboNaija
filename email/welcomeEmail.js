@@ -1,4 +1,4 @@
-export const welcomeEmail = (firstName) => `
+ const welcomeEmail = (firstName) => `
     <div style="font-family: sans-serif; max-width: 480px; margin: auto; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
         
         <!-- HEADER -->
@@ -51,3 +51,5 @@ export const welcomeEmail = (firstName) => `
 
     </div>
 `.trim();
+
+module.exports = welcomeEmail;

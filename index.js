@@ -11,7 +11,7 @@ app.use(express.json({limit:"5mb"}));
 app.use(cors());
 const UserRouter =require("./routers/user.routes");
 const PostRouter =require("./routers/post.routes");
-const authRoutes = require("./routes/authRoutes");
+const authRoutes = require("./routers/authRoutes");
 app.use('/api/v1', UserRouter)
 app.use('/api/v1', PostRouter)
 app.use("/api/v1/auth", authRoutes);
