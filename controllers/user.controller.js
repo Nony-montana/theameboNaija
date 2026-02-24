@@ -58,7 +58,7 @@ const createUser = async (req, res) => {
 const login= async(req, res)=>{
     const {email, password}= req.body;
     try {
-        const isUser= await UserModel.findOne({email});
+        const isUser= await UserModel.findOne({email}).select("+password");
         if(!isUser){
             res.status(404).send({
                 message:"Invalid credentials",
@@ -67,7 +67,7 @@ const login= async(req, res)=>{
             return;
         }
 
-        const isMatch= await bcrypt.compare(password, isUser.password).select("+password")
+        const isMatch= await bcrypt.compare(password, isUser.password)
         if(!isMatch){
               res.status(404).send({
                 message:"Invalid credentials",
