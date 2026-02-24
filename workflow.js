@@ -29,6 +29,6 @@
 
 //cloudinary✅
 //nodemailer✅
-//auth and authorization
+//auth and authorization ,
 //delete comment 
 //delete post
