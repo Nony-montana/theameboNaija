@@ -8,6 +8,7 @@ const {
     resetPassword,
     changePassword,
     deleteAccount,
+    updateProfile,
 } = require("../controllers/auth.controller");
 const { verifyUser } = require("../controllers/user.controller");
 
@@ -21,5 +22,6 @@ router.post("/reset-password", resetPassword);
 // Protected
 router.put("/change-password", verifyUser, changePassword);
 router.delete("/delete-account", verifyUser, deleteAccount);
+router.put("/update-profile", verifyUser, updateProfile);
 
 module.exports = router;

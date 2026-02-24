@@ -103,6 +103,46 @@ const login = async (req, res) => {
         res.status(500).send({ message: "Login failed", error: error.message });
     }
 };
+// ─────────────────────────────────────────
+// UPDATE PROFILE (logged in)
+// PUT /api/v1/auth/update-profile
+// ─────────────────────────────────────────
+const updateProfile = async (req, res) => {
+    try {
+        const { firstName, lastName, email } = req.body;
+
+        if (!firstName || !lastName || !email) {
+            return res.status(400).send({ message: "All fields are required" });
+        }
+
+        // If email is being changed, check it's not already taken by another user
+        const existingEmail = await UserModel.findOne({ email, _id: { $ne: req.user.id } });
+        if (existingEmail) {
+            return res.status(409).send({ message: "Email is already in use by another account" });
+        }
+
+        const updatedUser = await UserModel.findByIdAndUpdate(
+            req.user.id,
+            { firstName, lastName, email },
+            { new: true, runValidators: true }
+        );
+
+        res.status(200).send({
+            message: "Profile updated successfully",
+            data: {
+                id: updatedUser._id,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                email: updatedUser.email,
+                roles: updatedUser.roles,
+            },
+        });
+
+    } catch (error) {
+        console.log("UPDATE PROFILE ERROR:", error.message);
+        res.status(500).send({ message: "Failed to update profile", error: error.message });
+    }
+};
 
 // ─────────────────────────────────────────
 // FORGOT PASSWORD — STEP 1: Send OTP
@@ -332,4 +372,5 @@ module.exports = {
     resetPassword,
     changePassword,
     deleteAccount,
+    updateProfile
 };
