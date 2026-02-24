@@ -180,15 +180,11 @@ const updatePost = async (req, res) => {
             }
         }
 
-        // FIX: Handle image as a multer file upload (req.file) instead of base64 (req.body.image).
-        // The frontend sends a file via FormData, not a base64 string, so the old
-        // base64 check never triggered — image updates were silently ignored.
+        // CloudinaryStorage (in config/cloudinary.js) uploads the image automatically
+        // before the request even reaches this controller. The resulting Cloudinary
+        // URL is stored in req.file.path — no manual upload call needed.
         if (req.file) {
-            const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-                folder: "blog-images",
-                transformation: [{ width: 1200, quality: "auto" }],
-            });
-            updateData.image = uploadResult.secure_url;
+            updateData.image = req.file.path;
         }
 
         // FIX: Only regenerate slug when the title actually changes.
@@ -228,39 +224,6 @@ const updatePost = async (req, res) => {
         });
     }
 };
-// =====================
-// DELETE A POST
-// =====================
-const deletePost = async (req, res) => {
-  try {
-    const { slug } = req.params;
-
-    const post = await PostModel.findOne({ slug });
-
-    if (!post) {
-      return res.status(404).send({ message: "Post not found" });
-    }
-
-    // Only the author or an admin can delete
-    if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res.status(403).send({
-        message: "You are not allowed to delete this post",
-      });
-    }
-
-    await PostModel.findOneAndDelete({ slug });
-
-    res.status(200).send({
-      message: "Post deleted successfully",
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      message: "Failed to delete post",
-    });
-  }
-};
-
 // =====================
 // APPROVE A POST (admin only)
 // =====================
