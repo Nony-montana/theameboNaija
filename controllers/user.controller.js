@@ -1,50 +1,59 @@
 const UserModel = require('../models/user.model');
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
+const { sendEmail } = require('../utils/sendEmail');
+const { welcomeEmail } = require('../email/welcomeEmail');
 
 
-const createUser = async (req, res)=>{
-    const {lastName, firstName, email, password} = req.body;
+const createUser = async (req, res) => {
+    const { lastName, firstName, email, password } = req.body;
 
     try {
         const saltround = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, saltround);
 
-        const hashedPassword = await bcrypt.hash(password, saltround)
+        const user = await UserModel.create({ firstName, lastName, email, password: hashedPassword });
 
-        const user = await UserModel.create({firstName, lastName, email, password: hashedPassword});
+        const token = await jwt.sign(
+            { id: user._id, roles: user.roles },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
 
-        const token = await jwt.sign({id:user._id,  roles: user.roles}, process.env.JWT_SECRET, {expiresIn:"1h"})
-
+        // Welcome email in its own try/catch so a mail failure
+        // never breaks registration or returns an error to the user
+        try {
+            await sendEmail({
+                to: email,
+                subject: "Welcome to Amebonaija! 🎉",
+                html: welcomeEmail(firstName),
+            });
+        } catch (emailError) {
+            // Log the failure but don't block the registration response
+            console.log("WELCOME EMAIL FAILED:", emailError.message);
+        }
 
         res.status(201).send({
-            message:"User created successfully",
-            data:{
+            message: "User created successfully",
+            data: {
                 lastName,
                 firstName,
                 email,
-                roles:user.roles
-              
-
+                roles: user.roles,
             },
-            token
+            token,
         });
 
     } catch (error) {
         console.log(error);
 
-        if(error.code == 11000){
-            return res.status(400).send({
-                message:"User already exist"
-            })
+        if (error.code == 11000) {
+            return res.status(400).send({ message: "User already exist" });
         }
 
-        res.status(400).send({
-            message:"User creation failed"
-
-        })
-        
+        res.status(400).send({ message: "User creation failed" });
     }
-}
+};
 
 const login= async(req, res)=>{
     const {email, password}= req.body;
