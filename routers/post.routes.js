@@ -21,10 +21,19 @@ const {
     previewPost
 } = require("../controllers/post.controller");
 
+const {
+    getMe,
+    updateProfile,
+    changePassword,
+    deleteAccount,
+    forgotPassword,
+    verifyOtp,
+    resetPassword,
+} = require("../controllers/auth.controller");
+
 
 // =====================
 // PUBLIC ROUTES
-// (anyone can access these, no login needed)
 // =====================
 router.get("/posts", getAllPosts);
 router.get("/posts/search", searchPosts);
@@ -32,15 +41,24 @@ router.get("/posts/trending", getTrendingPosts);
 router.get("/posts/:slug", getSinglePost);
 router.get("/my-posts", verifyUser, getMyPosts);
 
+// Auth — public
+router.post("/auth/forgot-password", forgotPassword);
+router.post("/auth/verify-otp", verifyOtp);
+router.post("/auth/reset-password", resetPassword);
+
 
 // =====================
 // PROTECTED ROUTES
-// (you must be logged in to access these)
-// verifyUser checks your token before allowing access
 // =====================
 
+// Auth — protected
+router.get("/auth/me", verifyUser, getMe);
+router.put("/auth/update-profile", verifyUser, updateProfile);
+router.put("/auth/change-password", verifyUser, changePassword);
+router.delete("/auth/delete-account", verifyUser, deleteAccount);
+
 // Post CRUD
-router.post("/posts", verifyUser,  createPost);
+router.post("/posts", verifyUser, createPost);
 router.put("/posts/:slug", verifyUser, upload.single("image"), updatePost);
 // router.delete("/posts/:slug", verifyUser, deletePost);
 

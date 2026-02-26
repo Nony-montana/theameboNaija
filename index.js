@@ -7,7 +7,7 @@ const cors = require("cors");
 app.set('view engine', 'ejs');
 dotenv.config();
 app.use(express.urlencoded({limit:"5mb" ,extended:true}));
-app.use(express.json({limit:"5mb"}));
+app.use(express.json({limit:"50mb"}));
 app.use(cors());
 const UserRouter =require("./routers/user.routes");
 const PostRouter =require("./routers/post.routes");

@@ -309,9 +309,17 @@ const previewPost = async (req, res) => {
             return res.status(404).send({ message: "Post not found" });
         }
 
+        // Allow access if the requester is admin OR the post's own author
+        const isAdmin = req.user.roles === "admin";
+        const isAuthor = post.author._id.toString() === req.user.id;
+
+        if (!isAdmin && !isAuthor) {
+            return res.status(403).send({ message: "You are not allowed to preview this post" });
+        }
+
         res.status(200).send({
             message: "Post fetched successfully",
-            data: post
+            data: post,
         });
 
     } catch (error) {

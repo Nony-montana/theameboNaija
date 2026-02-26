@@ -1,9 +1,9 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const UserModel = require("../models/user.model");     // adjust path if needed
-const PostModel = require("../models/post.model");     // adjust path if needed
-const { sendEmail } = require("../utils/sendEmail");   // adjust path if needed
+const UserModel = require("../models/user.model");
+const PostModel = require("../models/post.model");
+const { sendEmail } = require("../utils/sendEmail");
 
 // ─────────────────────────────────────────
 // HELPER: generate signed JWT
@@ -33,14 +33,13 @@ const register = async (req, res) => {
         if (existingEmail)
             return res.status(409).send({ message: "Email is already registered" });
 
-        
-
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        // FIX: was "lastName: user.lastName" which referenced user before it was created
         const user = await UserModel.create({
             firstName,
-                lastName: user.lastName,
+            lastName,
             email,
             password: hashedPassword,
         });
@@ -103,6 +102,36 @@ const login = async (req, res) => {
         res.status(500).send({ message: "Login failed", error: error.message });
     }
 };
+
+// ─────────────────────────────────────────
+// GET ME — validate token & return user
+// GET /api/v1/auth/me
+// Called by App.jsx on every page load to restore auth state from cookie
+// ─────────────────────────────────────────
+const getMe = async (req, res) => {
+    try {
+        const user = await UserModel.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).send({ message: "User not found" });
+        }
+
+        res.status(200).send({
+            data: {
+                id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                roles: user.roles,
+            },
+        });
+
+    } catch (error) {
+        console.log("GET ME ERROR:", error.message);
+        res.status(500).send({ message: "Failed to fetch user", error: error.message });
+    }
+};
+
 // ─────────────────────────────────────────
 // UPDATE PROFILE (logged in)
 // PUT /api/v1/auth/update-profile
@@ -214,7 +243,6 @@ const forgotPassword = async (req, res) => {
 // ─────────────────────────────────────────
 // VERIFY OTP — STEP 2
 // POST /api/v1/auth/verify-otp
-// Returns a short-lived resetToken on success
 // ─────────────────────────────────────────
 const verifyOtp = async (req, res) => {
     try {
@@ -234,7 +262,6 @@ const verifyOtp = async (req, res) => {
         if (!user)
             return res.status(400).send({ message: "Invalid or expired OTP" });
 
-        // Issue a short-lived token only valid for resetting the password
         const resetToken = jwt.sign(
             { id: user._id, purpose: "reset" },
             process.env.JWT_SECRET,
@@ -367,10 +394,11 @@ const deleteAccount = async (req, res) => {
 module.exports = {
     register,
     login,
+    getMe,
+    updateProfile,
     forgotPassword,
     verifyOtp,
     resetPassword,
     changePassword,
     deleteAccount,
-    updateProfile
 };

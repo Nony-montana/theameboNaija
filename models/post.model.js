@@ -12,7 +12,7 @@ const PostSchema = new mongoose.Schema({
     author: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
     category: { 
         type: String, 
-        enum: ["news", "gist", "gossip", "entertainment", "lifestyle"], 
+        enum: ["news", "gist", "gossip", "entertainment", "lifestyle", "sports"], 
         required: true 
     },
     image: { type: String },
@@ -36,6 +36,3 @@ const PostSchema = new mongoose.Schema({
 const PostModel = mongoose.model("post", PostSchema);
 
 module.exports = PostModel;
-
-
-
