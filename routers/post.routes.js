@@ -21,16 +21,6 @@ const {
     previewPost
 } = require("../controllers/post.controller");
 
-const {
-    getMe,
-    updateProfile,
-    changePassword,
-    deleteAccount,
-    forgotPassword,
-    verifyOtp,
-    resetPassword,
-} = require("../controllers/auth.controller");
-
 
 // =====================
 // PUBLIC ROUTES
@@ -41,21 +31,6 @@ router.get("/posts/trending", getTrendingPosts);
 router.get("/posts/:slug", getSinglePost);
 router.get("/my-posts", verifyUser, getMyPosts);
 
-// Auth — public
-router.post("/auth/forgot-password", forgotPassword);
-router.post("/auth/verify-otp", verifyOtp);
-router.post("/auth/reset-password", resetPassword);
-
-
-// =====================
-// PROTECTED ROUTES
-// =====================
-
-// Auth — protected
-router.get("/auth/me", verifyUser, getMe);
-router.put("/auth/update-profile", verifyUser, updateProfile);
-router.put("/auth/change-password", verifyUser, changePassword);
-router.delete("/auth/delete-account", verifyUser, deleteAccount);
 
 // Post CRUD
 router.post("/posts", verifyUser, createPost);
