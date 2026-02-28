@@ -483,6 +483,75 @@ const deleteComment = async (req, res) => {
 };
 
 // =====================
+// EDIT A COMMENT
+// PUT /api/v1/posts/:slug/comment/:commentId
+// =====================
+const editComment = async (req, res) => {
+    try {
+        const { slug, commentId } = req.params;
+        const { text } = req.body;
+
+        if (!text || !text.trim()) {
+            return res.status(400).send({ message: "Comment text is required" });
+        }
+
+        const post = await PostModel.findOne({ slug });
+
+        if (!post) {
+            return res.status(404).send({ message: "Post not found" });
+        }
+
+        const comment = post.comments.id(commentId);
+
+        if (!comment) {
+            return res.status(404).send({ message: "Comment not found" });
+        }
+
+        // Only the comment owner or an admin can edit
+        if (comment.user.toString() !== req.user.id ) {
+            return res.status(403).send({ message: "You are not allowed to edit this comment" });
+        }
+
+        comment.text = text.trim();
+        await post.save();
+
+        res.status(200).send({ message: "Comment updated successfully" });
+
+    } catch (error) {
+        console.log("EDIT COMMENT ERROR:", error.message);
+        res.status(500).send({ message: "Failed to edit comment" });
+    }
+};
+// =====================
+// DELETE A POST (author or admin)
+// DELETE /api/v1/posts/:slug
+// =====================
+const deletePost = async (req, res) => {
+    try {
+        const { slug } = req.params;
+
+        const post = await PostModel.findOne({ slug });
+
+        if (!post) {
+            return res.status(404).send({ message: "Post not found" });
+        }
+
+        // Only the author or an admin can delete
+        if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
+            return res.status(403).send({ message: "You are not allowed to delete this post" });
+        }
+
+        await PostModel.findByIdAndDelete(post._id);
+
+        res.status(200).send({ message: "Post deleted successfully" });
+
+    } catch (error) {
+        console.log("DELETE POST ERROR:", error.message);
+        res.status(500).send({ message: "Failed to delete post", error: error.message });
+    }
+};
+
+// =====================
 // SEARCH POSTS
 // =====================
 const searchPosts = async (req, res) => {
@@ -568,7 +637,7 @@ module.exports = {
   getAllPosts,
   getSinglePost,
   updatePost,
-  // deletePost,
+  deletePost,
   approvePost,
   previewPost,
   rejectPost,
@@ -577,6 +646,7 @@ module.exports = {
   sharePost,
   addComment,
   deleteComment,
+  editComment,
   searchPosts,
   getTrendingPosts,
   getMyPosts,
