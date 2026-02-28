@@ -276,9 +276,6 @@ const deleteAccount = async (req, res) => {
 };
 
 module.exports = {
-    register,
-    login,
-    getMe,
     updateProfile,
     forgotPassword,
     verifyOtp,
