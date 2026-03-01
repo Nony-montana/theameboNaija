@@ -711,6 +711,70 @@ const getAdminStats = async (req, res) => {
     }
 };
 
+// =====================
+// GET ALL POSTS (admin)
+// GET /api/v1/admin/posts
+// =====================
+const adminGetAllPosts = async (req, res) => {
+    try {
+        if (req.user.roles !== "admin") {
+            return res.status(403).send({ message: "Access denied" });
+        }
+
+        const { page = 1, limit = 15, search, category, status } = req.query;
+        const skip = (page - 1) * limit;
+
+        const filter = {};
+        if (search)   filter.title    = { $regex: search, $options: "i" };
+        if (category) filter.category = category;
+        if (status)   filter.status   = status;
+
+        const [posts, total] = await Promise.all([
+            PostModel.find(filter)
+                .populate("author", "firstName lastName email")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .select("title category status views likes comments shares createdAt author slug image"),
+            PostModel.countDocuments(filter),
+        ]);
+
+        res.status(200).send({
+            message: "Posts fetched successfully",
+            total,
+            page: Number(page),
+            totalPages: Math.ceil(total / limit),
+            data: posts,
+        });
+
+    } catch (error) {
+        console.log("ADMIN GET ALL POSTS ERROR:", error.message);
+        res.status(500).send({ message: "Failed to fetch posts" });
+    }
+};
+
+// =====================
+// ADMIN DELETE POST
+// DELETE /api/v1/admin/posts/:slug
+// =====================
+const adminDeletePost = async (req, res) => {
+    try {
+        if (req.user.roles !== "admin") {
+            return res.status(403).send({ message: "Access denied" });
+        }
+
+        const post = await PostModel.findOne({ slug: req.params.slug });
+        if (!post) return res.status(404).send({ message: "Post not found" });
+
+        await PostModel.findByIdAndDelete(post._id);
+        res.status(200).send({ message: "Post deleted successfully" });
+
+    } catch (error) {
+        console.log("ADMIN DELETE POST ERROR:", error.message);
+        res.status(500).send({ message: "Failed to delete post" });
+    }
+};
+
 module.exports = {
   createPost,
   getAllPosts,
@@ -729,5 +793,7 @@ module.exports = {
   searchPosts,
   getTrendingPosts,
   getMyPosts,
-  getAdminStats
+  getAdminStats,
+  adminGetAllPosts,
+  adminDeletePost
 };

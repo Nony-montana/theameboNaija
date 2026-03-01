@@ -7,7 +7,7 @@ const UserSchema = new mongoose.Schema({
     // select: false — password is never returned in queries unless you explicitly add .select("+password")
     password:   { type: String, required: true, select: false },
     roles:      { type: String, enum: ["user", "admin"], default: "user" },
-
+isActive: { type: Boolean, default: true },
     // OTP fields for forgot password flow
     resetPasswordOtp:         { type: String, default: null },
     resetPasswordOtpExpires:  { type: Date, default: null },
