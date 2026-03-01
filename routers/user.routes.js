@@ -20,6 +20,5 @@ router.get("/me", verifyUser, getMe);
 router.put("/admin/users/:userId/role", verifyUser, updateUserRole);
 router.put("/admin/users/:userId/status", verifyUser, updateUserStatus);
 router.delete("/admin/users/:userId", verifyUser, adminDeleteUser);
-// router.get("/admin/users",                    verifyUser, getAllUsers);
 
 module.exports = router;

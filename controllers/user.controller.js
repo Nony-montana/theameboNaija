@@ -118,29 +118,6 @@ const getUser = async (req, res) => {
   }
 };
 
-// const getAllUsers = async (req, res) => {
-//   const user = req.user.roles;
-//   try {
-//     if (user !== "admin") {
-//       return res.status(403).send({
-//         message: "Forbidden request",
-//       });
-//     }
-
-//     let users = await UserModel.find().select("-password ");
-//     res.status(200).send({
-//       message: "users retrieved successfully",
-//       data: users,
-//     });
-//   } catch (error) {
-//     console.log(error);
-
-//     res.status(400).send({
-//       message: "users not retrieved found",
-//     });
-//   }
-// };
-
 const verifyUser = (req, res, next) => {
   const token = req.headers["authorization"]?.split(" ")[1];
   // ? req.headers["authorization"].split("")[1];
@@ -339,7 +316,6 @@ const adminDeleteUser = async (req, res) => {
         res.status(500).send({ message: "Failed to delete user" });
     }
 };
-
 
 module.exports = {
   createUser,

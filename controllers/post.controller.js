@@ -775,6 +775,121 @@ const adminDeletePost = async (req, res) => {
     }
 };
 
+// =====================
+// GET ALL COMMENTS (admin)
+// GET /api/v1/admin/comments
+// =====================
+const adminGetAllComments = async (req, res) => {
+    try {
+        if (req.user.roles !== "admin") {
+            return res.status(403).send({ message: "Access denied" });
+        }
+
+        const { page = 1, limit = 20, search } = req.query;
+        const skip = (page - 1) * limit;
+
+        // Use aggregation to flatten comments out of posts
+        const pipeline = [
+            { $unwind: "$comments" },
+
+            // Populate comment user info
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "comments.user",
+                    foreignField: "_id",
+                    as: "commentUser"
+                }
+            },
+            { $unwind: { path: "$commentUser", preserveNullAndEmpty: true } },
+
+            // Search by comment text or commenter name
+            ...(search ? [{
+                $match: {
+                    $or: [
+                        { "comments.text": { $regex: search, $options: "i" } },
+                        { "commentUser.firstName": { $regex: search, $options: "i" } },
+                        { "commentUser.lastName": { $regex: search, $options: "i" } },
+                    ]
+                }
+            }] : []),
+
+            { $sort: { "comments.createdAt": -1 } },
+
+            // Get total count before pagination
+            {
+                $facet: {
+                    total: [{ $count: "count" }],
+                    data: [
+                        { $skip: skip },
+                        { $limit: Number(limit) },
+                        {
+                            $project: {
+                                _id: 0,
+                                postId: "$_id",
+                                postTitle: "$title",
+                                postSlug: "$slug",
+                                comment: "$comments",
+                                commenter: {
+                                    _id: "$commentUser._id",
+                                    firstName: "$commentUser.firstName",
+                                    lastName: "$commentUser.lastName",
+                                    email: "$commentUser.email",
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ];
+
+        const result = await PostModel.aggregate(pipeline);
+        const total = result[0]?.total[0]?.count || 0;
+        const comments = result[0]?.data || [];
+
+        res.status(200).send({
+            message: "Comments fetched successfully",
+            total,
+            page: Number(page),
+            totalPages: Math.ceil(total / limit),
+            data: comments,
+        });
+
+    } catch (error) {
+        console.log("ADMIN GET ALL COMMENTS ERROR:", error.message);
+        res.status(500).send({ message: "Failed to fetch comments" });
+    }
+};
+
+// =====================
+// ADMIN DELETE COMMENT
+// DELETE /api/v1/admin/posts/:slug/comment/:commentId
+// =====================
+const adminDeleteComment = async (req, res) => {
+    try {
+        if (req.user.roles !== "admin") {
+            return res.status(403).send({ message: "Access denied" });
+        }
+
+        const { slug, commentId } = req.params;
+
+        const post = await PostModel.findOne({ slug });
+        if (!post) return res.status(404).send({ message: "Post not found" });
+
+        const comment = post.comments.id(commentId);
+        if (!comment) return res.status(404).send({ message: "Comment not found" });
+
+        comment.deleteOne();
+        await post.save();
+
+        res.status(200).send({ message: "Comment deleted successfully" });
+
+    } catch (error) {
+        console.log("ADMIN DELETE COMMENT ERROR:", error.message);
+        res.status(500).send({ message: "Failed to delete comment" });
+    }
+};
+
 module.exports = {
   createPost,
   getAllPosts,
@@ -795,5 +910,7 @@ module.exports = {
   getMyPosts,
   getAdminStats,
   adminGetAllPosts,
-  adminDeletePost
+  adminDeletePost,
+  adminGetAllComments,
+  adminDeleteComment
 };

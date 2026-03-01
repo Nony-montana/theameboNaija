@@ -23,6 +23,8 @@ const {
   getAdminStats,
   adminGetAllPosts,
   adminDeletePost,
+  adminGetAllComments,
+  adminDeleteComment,
 } = require("../controllers/post.controller");
 
 // =====================
@@ -54,5 +56,11 @@ router.put("/posts/:slug/reject", verifyUser, rejectPost);
 router.get("/admin/stats", verifyUser, getAdminStats);
 router.get("/admin/posts", verifyUser, adminGetAllPosts);
 router.delete("/admin/posts/:slug", verifyUser, adminDeletePost);
+router.get("/admin/comments", verifyUser, adminGetAllComments);
+router.delete(
+  "/admin/posts/:slug/comment/:commentId",
+  verifyUser,
+  adminDeleteComment,
+);
 
 module.exports = router;
