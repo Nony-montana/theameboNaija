@@ -513,6 +513,7 @@ const editComment = async (req, res) => {
         }
 
         comment.text = text.trim();
+        comment.editedAt = new Date();
         await post.save();
 
         res.status(200).send({ message: "Comment updated successfully" });
