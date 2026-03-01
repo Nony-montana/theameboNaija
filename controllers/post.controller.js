@@ -1,5 +1,6 @@
 const { cloudinary } = require("../config/cloudinary");
 const PostModel = require("../models/post.model");
+const UserModel = require("../models/user.model");
 
 // =====================
 // HELPER FUNCTION
@@ -633,6 +634,83 @@ const getTrendingPosts = async (req, res) => {
   }
 };
 
+// =====================
+// GET ADMIN STATS
+// GET /api/v1/admin/stats
+// Admin only
+// =====================
+const getAdminStats = async (req, res) => {
+    try {
+        if (req.user.roles !== "admin") {
+            return res.status(403).send({ message: "Access denied" });
+        }
+
+        // Run all queries in parallel for speed
+        const [
+            totalPosts,
+            totalUsers,
+            totalComments,
+            pendingPosts,
+            publishedPosts,
+            draftPosts,
+            rejectedPosts,
+            categoryBreakdown,
+            recentPosts,
+            recentUsers,
+        ] = await Promise.all([
+            // Total counts
+            PostModel.countDocuments(),
+            UserModel.countDocuments(),
+            PostModel.aggregate([{ $project: { commentCount: { $size: "$comments" } } }, { $group: { _id: null, total: { $sum: "$commentCount" } } }]),
+            PostModel.countDocuments({ status: "pending" }),
+            PostModel.countDocuments({ status: "published" }),
+            PostModel.countDocuments({ status: "draft" }),
+            PostModel.countDocuments({ status: "rejected" }),
+
+            // Posts per category
+            PostModel.aggregate([
+                { $group: { _id: "$category", count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ]),
+
+            // 5 most recent posts
+            PostModel.find()
+                .populate("author", "firstName lastName")
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .select("title status category createdAt author"),
+
+            // 5 most recent users
+            UserModel.find()
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .select("firstName lastName email roles createdAt"),
+        ]);
+
+        res.status(200).send({
+            message: "Admin stats fetched successfully",
+            data: {
+                totals: {
+                    posts: totalPosts,
+                    users: totalUsers,
+                    comments: totalComments[0]?.total || 0,
+                    pending: pendingPosts,
+                    published: publishedPosts,
+                    drafts: draftPosts,
+                    rejected: rejectedPosts,
+                },
+                categoryBreakdown,
+                recentPosts,
+                recentUsers,
+            },
+        });
+
+    } catch (error) {
+        console.log("ADMIN STATS ERROR:", error.message);
+        res.status(500).send({ message: "Failed to fetch admin stats" });
+    }
+};
+
 module.exports = {
   createPost,
   getAllPosts,
@@ -651,4 +729,5 @@ module.exports = {
   searchPosts,
   getTrendingPosts,
   getMyPosts,
+  getAdminStats
 };

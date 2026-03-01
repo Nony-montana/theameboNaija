@@ -19,7 +19,8 @@ const {
     getTrendingPosts,
     getMyPosts,
     previewPost,
-    editComment
+    editComment,
+    getAdminStats
 } = require("../controllers/post.controller");
 
 
@@ -50,6 +51,7 @@ router.get("/posts/admin/pending", verifyUser, getPendingPosts);
 router.put("/posts/:slug/approve", verifyUser, approvePost);
 router.get("/posts/admin/preview/:slug", verifyUser, previewPost);
 router.put("/posts/:slug/reject", verifyUser, rejectPost);
+router.get("/admin/stats", verifyUser, getAdminStats);
 
 
 module.exports = router;
