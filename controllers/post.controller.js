@@ -786,81 +786,69 @@ const adminGetAllComments = async (req, res) => {
         }
 
         const { page = 1, limit = 20, search } = req.query;
-        const skip = (page - 1) * limit;
+        const skip = (page - 1) * Number(limit);
 
-        // Use aggregation to flatten comments out of posts
-        const pipeline = [
-            { $unwind: "$comments" },
+        // Step 1: get all posts that have at least one comment
+        const posts = await PostModel.find({ "comments.0": { $exists: true } })
+            .populate("comments.user", "firstName lastName email")
+            .select("title slug comments");
 
-            // Populate comment user info
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "comments.user",
-                    foreignField: "_id",
-                    as: "commentUser"
-                }
-            },
-            { $unwind: { path: "$commentUser", preserveNullAndEmpty: true } },
-
-            // Search by comment text or commenter name
-            ...(search ? [{
-                $match: {
-                    $or: [
-                        { "comments.text": { $regex: search, $options: "i" } },
-                        { "commentUser.firstName": { $regex: search, $options: "i" } },
-                        { "commentUser.lastName": { $regex: search, $options: "i" } },
-                    ]
-                }
-            }] : []),
-
-            { $sort: { "comments.createdAt": -1 } },
-
-            // Get total count before pagination
-            {
-                $facet: {
-                    total: [{ $count: "count" }],
-                    data: [
-                        { $skip: skip },
-                        { $limit: Number(limit) },
-                        {
-                            $project: {
-                                _id: 0,
-                                postId: "$_id",
-                                postTitle: "$title",
-                                postSlug: "$slug",
-                                comment: "$comments",
-                                commenter: {
-                                    _id: "$commentUser._id",
-                                    firstName: "$commentUser.firstName",
-                                    lastName: "$commentUser.lastName",
-                                    email: "$commentUser.email",
-                                }
-                            }
-                        }
-                    ]
-                }
+        // Step 2: flatten all comments into one array with post info attached
+        let allComments = [];
+        for (const post of posts) {
+            for (const comment of post.comments) {
+                allComments.push({
+                    postId:    post._id,
+                    postTitle: post.title,
+                    postSlug:  post.slug,
+                    comment: {
+                        _id:      comment._id,
+                        text:     comment.text,
+                        editedAt: comment.editedAt,
+                        createdAt: comment.createdAt,
+                    },
+                    commenter: comment.user
+                        ? {
+                            _id:       comment.user._id,
+                            firstName: comment.user.firstName,
+                            lastName:  comment.user.lastName,
+                            email:     comment.user.email,
+                          }
+                        : null,
+                });
             }
-        ];
+        }
 
-        const result = await PostModel.aggregate(pipeline);
-        const total = result[0]?.total[0]?.count || 0;
-        const comments = result[0]?.data || [];
+        // Step 3: sort newest first
+        allComments.sort((a, b) => new Date(b.comment.createdAt) - new Date(a.comment.createdAt));
+
+        // Step 4: apply search filter if provided
+        if (search) {
+            const term = search.toLowerCase();
+            allComments = allComments.filter((item) =>
+                item.comment.text?.toLowerCase().includes(term) ||
+                item.commenter?.firstName?.toLowerCase().includes(term) ||
+                item.commenter?.lastName?.toLowerCase().includes(term)
+            );
+        }
+
+        // Step 5: paginate
+        const total = allComments.length;
+        const paginated = allComments.slice(skip, skip + Number(limit));
 
         res.status(200).send({
             message: "Comments fetched successfully",
             total,
             page: Number(page),
-            totalPages: Math.ceil(total / limit),
-            data: comments,
+            totalPages: Math.ceil(total / Number(limit)),
+            data: paginated,
         });
 
     } catch (error) {
         console.log("ADMIN GET ALL COMMENTS ERROR:", error.message);
-        res.status(500).send({ message: "Failed to fetch comments" });
+        res.status(500).send({ message: "Failed to fetch comments", error: error.message });
     }
 };
-
 // =====================
 // ADMIN DELETE COMMENT
 // DELETE /api/v1/admin/posts/:slug/comment/:commentId
