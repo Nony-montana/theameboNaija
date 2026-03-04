@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Welcome to Amebo Naija</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Poppins', Arial, sans-serif;
+      background-color: #f4f7f4;
+      color: #1a1a1a;
+    }
+
+    .wrapper {
+      max-width: 600px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    .header {
+      background-color: #16a34a;
+      padding: 40px 40px 32px;
+      text-align: center;
+    }
+
+    .header .logo {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+
+    .header .logo span {
+      color: #bbf7d0;
+    }
+
+    .header .tagline {
+      font-size: 13px;
+      color: #bbf7d0;
+      margin-top: 4px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #15803d 0%, #16a34a 50%, #22c55e 100%);
+      padding: 36px 40px;
+      text-align: center;
+    }
+
+    .hero .emoji {
+      font-size: 48px;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .hero h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.3;
+    }
+
+    .hero h1 span {
+      color: #bbf7d0;
+    }
+
+    .body {
+      padding: 40px;
+    }
+
+    .body p {
+      font-size: 15px;
+      color: #374151;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+
+    .body p strong {
+      color: #16a34a;
+    }
+
+    .features {
+      background-color: #f0fdf4;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+      border-left: 4px solid #16a34a;
+    }
+
+    .features p.label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #16a34a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .feature-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .feature-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .feature-text {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.5;
+    }
+
+    .feature-text strong {
+      color: #15803d;
+      display: block;
+      font-weight: 600;
+    }
+
+    .cta-wrapper {
+      text-align: center;
+      margin: 32px 0 8px;
+    }
+
+    .cta-btn {
+      display: inline-block;
+      background-color: #16a34a;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 14px 40px;
+      border-radius: 50px;
+      letter-spacing: 0.3px;
+      box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+    }
+
+    .divider {
+      height: 1px;
+      background-color: #e5e7eb;
+      margin: 32px 0;
+    }
+
+    .footer {
+      background-color: #f9fafb;
+      padding: 28px 40px;
+      text-align: center;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .footer p {
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.7;
+      margin-bottom: 6px;
+    }
+
+    .footer p:last-child { margin-bottom: 0; }
+
+    .footer a {
+      color: #16a34a;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .footer .social {
+      margin: 14px 0 10px;
+      font-size: 20px;
+      letter-spacing: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="logo">Amebo<span>Naija</span></div>
+      <div class="tagline">Nigeria's #1 Gist Hub</div>
+    </div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <span class="emoji"></span>
+      <h1>Welcome aboard, <span><%= firstName %>!</span></h1>
+    </div>
+
+    <!-- BODY -->
+    <div class="body">
+      <p>
+        We're so excited to have you join the <strong>Amebo Naija</strong> family — the place where the hottest gist, news, entertainment, sports, and lifestyle content in Nigeria lives!
+      </p>
+
+      <p>
+        Your account is all set up and ready to go. Here's everything you can do on the platform:
+      </p>
+
+      <div class="features">
+        <p class="label">What you can do</p>
+
+        <div class="feature-item">
+          <span class="feature-icon">✍️</span>
+          <div class="feature-text">
+            <strong>Write & Share Posts</strong>
+            Submit your own gist, news, and stories for the community to read
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <span class="feature-icon">📰</span>
+          <div class="feature-text">
+            <strong>Read the Latest Gist</strong>
+            Stay up to date with news, gossip, entertainment, sports & lifestyle
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <span class="feature-icon">💬</span>
+          <div class="feature-text">
+            <strong>Join the Conversation</strong>
+            Comment, like and share posts that move you
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <span class="feature-icon">🔥</span>
+          <div class="feature-text">
+            <strong>Trending Content</strong>
+            Discover what Nigerians are talking about right now
+          </div>
+        </div>
+      </div>
+
+      <p>
+        If you ever have questions or need help, feel free to reach out to us. We're always here for you.
+      </p>
+
+      <p>
+        Now go ahead — explore, read, and drop your gist! 🇳🇬
+      </p>
+
+      <div class="cta-wrapper">
+        <a href="https://amebonaija.com" class="cta-btn">
+          Start Exploring →
+        </a>
+      </div>
+
+      <div class="divider"></div>
+
+      <p style="font-size: 13px; color: #9ca3af; text-align: center;">
+        If you didn't create an account on Amebo Naija, you can safely ignore this email.
+      </p>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <div class="social">🇳🇬</div>
+      <p>© <%= new Date().getFullYear() %> Amebo Naija. All rights reserved.</p>
+      <p>
+        You're receiving this email because you just signed up on
+        <a href="https://amebonaija.vercel.app">amebonaija.com</a>
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>

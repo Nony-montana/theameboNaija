@@ -1,8 +1,20 @@
 const UserModel = require("../models/user.model");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const welcomeEmail = require("../email/welcomeEmail");
-const { sendEmail } = require("../utils/sendEmail");
+const nodemailer = require("nodemailer");
+const mailSender = require("../middleware/mail");
+const PostModel = require ("../models/post.model");
+const OTPModel = require("../models/otp.model");
+const otpgen = require("otp-generator");
+
+let transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.NODE_MAIL,
+    pass: process.env.NODE_PASS
+  }
+});
+
 
 const createUser = async (req, res) => {
   const { lastName, firstName, email, password } = req.body;
@@ -18,6 +30,9 @@ const createUser = async (req, res) => {
       password: hashedPassword,
     });
 
+    const renderMail = await mailSender("welcomeMail.ejs", {firstName})
+
+
     const token = await jwt.sign(
       { id: user._id, roles: user.roles },
       process.env.JWT_SECRET,
@@ -26,16 +41,16 @@ const createUser = async (req, res) => {
 
     // Welcome email in its own try/catch so a mail failure
     // never breaks registration or returns an error to the user
-    try {
-      await sendEmail({
-        to: email,
-        subject: "Welcome to Amebonaija! 🎉",
-        html: welcomeEmail(firstName),
-      });
-    } catch (emailError) {
-      // Log the failure but don't block the registration response
-      console.log("WELCOME EMAIL FAILED:", emailError.message);
-    }
+    // try {
+    //   await sendEmail({
+    //     to: email,
+    //     subject: "Welcome to Amebonaija! 🎉",
+    //     html: welcomeEmail(firstName),
+    //   });
+    // } catch (emailError) {
+    //   // Log the failure but don't block the registration response
+    //   console.log("WELCOME EMAIL FAILED:", emailError.message);
+    // }
 
     res.status(201).send({
       message: "User created successfully",
@@ -47,6 +62,24 @@ const createUser = async (req, res) => {
       },
       token,
     });
+
+     let mailOptions = {
+  from: process.env.NODE_MAIL,
+  bcc: [email],
+  subject: `Welcome, ${firstName}`,
+  //use "to" if you want the user to see other emails
+  html:renderMail
+};
+
+transporter.sendMail(mailOptions, function(error, info){
+  if (error) {
+    console.log(error);
+  } else {
+    console.log('Email sent: ' + info.response);
+  }
+
+
+});
   } catch (error) {
     console.log(error);
 
@@ -87,6 +120,7 @@ const login = async (req, res) => {
     res.status(200).send({
       message: "User logged in successfully",
       data: {
+        id:isUser._id,
         email: isUser.email,
         roles: isUser.roles,
         firstName: isUser.firstName,
@@ -118,24 +152,23 @@ const getUser = async (req, res) => {
   }
 };
 
-const verifyUser = (req, res, next) => {
-  const token = req.headers["authorization"]?.split(" ")[1];
-  // ? req.headers["authorization"].split("")[1];
-  // : req.headers["authorization"].split("")[0];
+const verifyUser = async (req, res, next) => {
+    const token = req.headers["authorization"]?.split(" ")[1];
 
-  jwt.verify(token, process.env.JWT_SECRET, function (err, decoded) {
-    if (err) {
-      res.status(401).send({
-        message: " User Unauthorized",
-      });
-      return;
-    }
+    jwt.verify(token, process.env.JWT_SECRET, async function (err, decoded) {
+        if (err) {
+            return res.status(401).send({ message: "User Unauthorized" });
+        }
 
-    console.log(decoded);
+        // Check if account is deactivated
+        const user = await UserModel.findById(decoded.id);
+        if (!user || user.isActive === false) {
+            return res.status(403).send({ message: "Your account has been deactivated. Contact support." });
+        }
 
-    req.user = decoded;
-    next();
-  });
+        req.user = decoded;
+        next();
+    });
 };
 
 const getMe = async (req, res) => {
@@ -317,6 +350,57 @@ const adminDeleteUser = async (req, res) => {
     }
 };
 
+// =============================
+// REQUEST-OTP
+
+const requestOTP = async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await UserModel.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    const sendOTP = otpgen.generate(4, {
+      upperCaseAlphabets: false,
+      specialChars: false,
+      lowerCaseAlphabets: false,
+      digits: true,
+    });
+
+    await OTPModel.deleteMany({ email });
+    await OTPModel.create({ email, otp: sendOTP });
+
+    const otpMailContent = await mailSender("otpMail.ejs", {
+      otp: sendOTP,
+      firstName: user.firstName,
+    });
+
+    const mailOptions = {
+      from: process.env.NODE_MAIL,
+      to: email,
+      subject: "Your OTP Code — Amebo Naija",
+      html: otpMailContent,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log("OTP email sent to:", email);
+    } catch (emailError) {
+      console.log("OTP EMAIL FAILED:", emailError.message);
+    }
+
+    res.status(200).send({ message: "OTP sent successfully" });
+
+  } catch (error) {
+    console.log("REQUEST OTP ERROR:", error.message);
+    res.status(400).send({ message: "OTP request failed" });
+  }
+};
+
+
+
 module.exports = {
   createUser,
   login,
@@ -326,5 +410,6 @@ module.exports = {
   getMe,
   updateUserRole,
   updateUserStatus,
-  adminDeleteUser
+  adminDeleteUser,
+  requestOTP
 };

@@ -1,9 +1,23 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const otpgen = require("otp-generator");
 const UserModel = require("../models/user.model");
 const PostModel = require("../models/post.model");
-const { sendEmail } = require("../utils/sendEmail");
+const OTPModel = require("../models/otp.model");
+const mailSender = require("../middleware/mail");
+const nodemailer = require("nodemailer");
+
+// ─────────────────────────────────────────
+// NODEMAILER TRANSPORTER
+// ─────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: process.env.NODE_MAIL,
+        pass: process.env.NODE_PASS,
+    },
+});
 
 // ─────────────────────────────────────────
 // HELPER: generate signed JWT
@@ -17,48 +31,7 @@ const generateToken = (user) =>
 
 
 // ─────────────────────────────────────────
-// UPDATE PROFILE (logged in)
-// PUT /api/v1/auth/update-profile
-// ─────────────────────────────────────────
-const updateProfile = async (req, res) => {
-    try {
-        const { firstName, lastName, email } = req.body;
-
-        if (!firstName || !lastName || !email) {
-            return res.status(400).send({ message: "All fields are required" });
-        }
-
-        // If email is being changed, check it's not already taken by another user
-        const existingEmail = await UserModel.findOne({ email, _id: { $ne: req.user.id } });
-        if (existingEmail) {
-            return res.status(409).send({ message: "Email is already in use by another account" });
-        }
-
-        const updatedUser = await UserModel.findByIdAndUpdate(
-            req.user.id,
-            { firstName, lastName, email },
-            { new: true, runValidators: true }
-        );
-
-        res.status(200).send({
-            message: "Profile updated successfully",
-            data: {
-                id: updatedUser._id,
-                firstName: updatedUser.firstName,
-                lastName: updatedUser.lastName,
-                email: updatedUser.email,
-                roles: updatedUser.roles,
-            },
-        });
-
-    } catch (error) {
-        console.log("UPDATE PROFILE ERROR:", error.message);
-        res.status(500).send({ message: "Failed to update profile", error: error.message });
-    }
-};
-
-// ─────────────────────────────────────────
-// FORGOT PASSWORD — STEP 1: Send OTP
+// FORGOT PASSWORD — sends OTP via crypto (alternative flow)
 // POST /api/v1/auth/forgot-password
 // ─────────────────────────────────────────
 const forgotPassword = async (req, res) => {
@@ -87,32 +60,24 @@ const forgotPassword = async (req, res) => {
         user.resetPasswordOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
         await user.save();
 
-        await sendEmail({
-            to: user.email,
-            subject: "Your Password Reset OTP — TheAmeboNaija",
-            html: `
-                <div style="font-family: sans-serif; max-width: 480px; margin: auto;">
-                    <h2 style="color: #16a34a;">Password Reset OTP</h2>
-                    <p>Hi ${user.firstName || "there"},</p>
-                    <p>Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
-                    <div style="
-                        font-size: 36px;
-                        font-weight: bold;
-                        letter-spacing: 10px;
-                        color: #16a34a;
-                        background: #f0fdf4;
-                        border: 2px dashed #16a34a;
-                        border-radius: 8px;
-                        padding: 20px;
-                        text-align: center;
-                        margin: 24px 0;
-                    ">${otp}</div>
-                    <p style="color: #888; font-size: 13px;">
-                        If you didn't request this, ignore this email. Your password won't change.
-                    </p>
-                </div>
-            `,
+        const otpMailContent = await mailSender("otpMail.ejs", {
+            otp,
+            firstName: user.firstName,
         });
+
+        const mailOptions = {
+            from: process.env.NODE_MAIL,
+            to: email,
+            subject: "Your Password Reset OTP — Amebo Naija",
+            html: otpMailContent,
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            console.log("Forgot password OTP sent to:", email);
+        } catch (emailError) {
+            console.log("FORGOT PASSWORD EMAIL FAILED:", emailError.message);
+        }
 
         res.status(200).send({
             message: "If an account with that email exists, an OTP has been sent",
@@ -135,17 +100,17 @@ const verifyOtp = async (req, res) => {
         if (!email || !otp)
             return res.status(400).send({ message: "Email and OTP are required" });
 
-        const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
+        // Look up OTP in OTPModel
+        const otpRecord = await OTPModel.findOne({ email, otp });
 
-        const user = await UserModel.findOne({
-            email,
-            resetPasswordOtp: hashedOtp,
-            resetPasswordOtpExpires: { $gt: Date.now() },
-        });
-
-        if (!user)
+        if (!otpRecord)
             return res.status(400).send({ message: "Invalid or expired OTP" });
 
+        // OTP is valid — delete it so it can't be reused
+        await OTPModel.deleteMany({ email });
+
+        // Issue a short-lived reset token
+        const user = await UserModel.findOne({ email });
         const resetToken = jwt.sign(
             { id: user._id, purpose: "reset" },
             process.env.JWT_SECRET,
@@ -193,8 +158,6 @@ const resetPassword = async (req, res) => {
 
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
-        user.resetPasswordOtp = undefined;
-        user.resetPasswordOtpExpires = undefined;
         await user.save();
 
         res.status(200).send({ message: "Password reset successful. You can now log in." });
@@ -202,6 +165,44 @@ const resetPassword = async (req, res) => {
     } catch (error) {
         console.log("RESET PASSWORD ERROR:", error.message);
         res.status(500).send({ message: "Failed to reset password", error: error.message });
+    }
+};
+
+// ─────────────────────────────────────────
+// UPDATE PROFILE (logged in)
+// PUT /api/v1/auth/update-profile
+// ─────────────────────────────────────────
+const updateProfile = async (req, res) => {
+    try {
+        const { firstName, lastName, email } = req.body;
+
+        if (!firstName || !lastName || !email)
+            return res.status(400).send({ message: "All fields are required" });
+
+        const existingEmail = await UserModel.findOne({ email, _id: { $ne: req.user.id } });
+        if (existingEmail)
+            return res.status(409).send({ message: "Email is already in use by another account" });
+
+        const updatedUser = await UserModel.findByIdAndUpdate(
+            req.user.id,
+            { firstName, lastName, email },
+            { new: true, runValidators: true }
+        );
+
+        res.status(200).send({
+            message: "Profile updated successfully",
+            data: {
+                id: updatedUser._id,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                email: updatedUser.email,
+                roles: updatedUser.roles,
+            },
+        });
+
+    } catch (error) {
+        console.log("UPDATE PROFILE ERROR:", error.message);
+        res.status(500).send({ message: "Failed to update profile", error: error.message });
     }
 };
 
@@ -276,10 +277,12 @@ const deleteAccount = async (req, res) => {
 };
 
 module.exports = {
-    updateProfile,
+   
     forgotPassword,
     verifyOtp,
     resetPassword,
+    updateProfile,
     changePassword,
     deleteAccount,
+    generateToken,
 };

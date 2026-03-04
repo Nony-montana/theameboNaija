@@ -9,6 +9,7 @@ const {
   updateUserRole,
   updateUserStatus,
   adminDeleteUser,
+  requestOTP
 } = require("../controllers/user.controller");
 const router = express.Router();
 
@@ -16,6 +17,7 @@ router.post("/register", createUser);
 router.post("/login", login);
 router.get("/allusers/:id", verifyUser, getUser);
 router.get("/getallusers", verifyUser, getAllUsers);
+router.post('/request-otp',requestOTP)
 router.get("/me", verifyUser, getMe);
 router.put("/admin/users/:userId/role", verifyUser, updateUserRole);
 router.put("/admin/users/:userId/status", verifyUser, updateUserStatus);
