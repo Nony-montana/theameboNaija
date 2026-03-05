@@ -4,7 +4,7 @@ const {
     forgotPassword,
     verifyOtp,
     resetPassword,
-    changePassword,
+     changePasswordWithOTP,
     deleteAccount,
     updateProfile,
 } = require("../controllers/auth.controller");
@@ -14,9 +14,9 @@ const { verifyUser } = require("../controllers/user.controller");
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
 router.post("/reset-password", resetPassword);
+router.post("/change-password-otp", verifyUser, changePasswordWithOTP);
 
 // Protected
-router.put("/change-password", verifyUser, changePassword);
 router.delete("/delete-account", verifyUser, deleteAccount);
 router.put("/update-profile", verifyUser, updateProfile);
 

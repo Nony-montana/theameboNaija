@@ -206,15 +206,18 @@ const updateProfile = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────
-// CHANGE PASSWORD (logged in)
-// PUT /api/v1/auth/change-password
-// ─────────────────────────────────────────
-const changePassword = async (req, res) => {
+// =====================================================
+// CHANGE PASSWORD WITH OTP
+// POST /api/v1/auth/change-password-otp
+// Protected (verifyUser)
+// Flow: OTP + current password + new password
+// =====================================================
+const  changePasswordWithOTP = async (req, res) => {
     try {
-        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+        const { otp, currentPassword, newPassword, confirmNewPassword } = req.body;
 
-        if (!currentPassword || !newPassword || !confirmNewPassword)
+        // Validate all fields
+        if (!otp || !currentPassword || !newPassword || !confirmNewPassword)
             return res.status(400).send({ message: "All fields are required" });
 
         if (newPassword !== confirmNewPassword)
@@ -226,13 +229,23 @@ const changePassword = async (req, res) => {
         if (currentPassword === newPassword)
             return res.status(400).send({ message: "New password must be different from current password" });
 
+        // Get user with email (needed for OTP lookup)
         const user = await UserModel.findById(req.user.id).select("+password");
         if (!user)
             return res.status(404).send({ message: "User not found" });
 
+        // Verify OTP
+        const otpRecord = await OTPModel.findOne({ email: user.email, otp });
+        if (!otpRecord)
+            return res.status(400).send({ message: "Invalid or expired OTP" });
+
+        // Verify current password
         const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch)
             return res.status(401).send({ message: "Current password is incorrect" });
+
+        // All checks passed — delete OTP and update password
+        await OTPModel.deleteMany({ email: user.email });
 
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
@@ -241,7 +254,7 @@ const changePassword = async (req, res) => {
         res.status(200).send({ message: "Password changed successfully" });
 
     } catch (error) {
-        console.log("CHANGE PASSWORD ERROR:", error.message);
+        console.log("CHANGE PASSWORD WITH OTP ERROR:", error.message);
         res.status(500).send({ message: "Failed to change password", error: error.message });
     }
 };
@@ -282,7 +295,7 @@ module.exports = {
     verifyOtp,
     resetPassword,
     updateProfile,
-    changePassword,
+    changePasswordWithOTP,
     deleteAccount,
     generateToken,
 };
