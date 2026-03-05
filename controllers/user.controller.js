@@ -18,20 +18,13 @@ let transporter = nodemailer.createTransport({
 
 const createUser = async (req, res) => {
   const { lastName, firstName, email, password } = req.body;
-
   try {
     const saltround = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, saltround);
 
     const user = await UserModel.create({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
+      firstName, lastName, email, password: hashedPassword,
     });
-
-    const renderMail = await mailSender("welcomeMail.ejs", {firstName})
-
 
     const token = await jwt.sign(
       { id: user._id, roles: user.roles },
@@ -39,58 +32,36 @@ const createUser = async (req, res) => {
       { expiresIn: "1h" },
     );
 
-    // Welcome email in its own try/catch so a mail failure
-    // never breaks registration or returns an error to the user
-    // try {
-    //   await sendEmail({
-    //     to: email,
-    //     subject: "Welcome to Amebonaija! 🎉",
-    //     html: welcomeEmail(firstName),
-    //   });
-    // } catch (emailError) {
-    //   // Log the failure but don't block the registration response
-    //   console.log("WELCOME EMAIL FAILED:", emailError.message);
-    // }
+    // ✅ Send email BEFORE res.send()
+    try {
+      const renderMail = await mailSender("welcomeMail.ejs", { firstName });
+      const mailOptions = {
+        from: process.env.NODE_MAIL,
+        to: email,
+        subject: `Welcome, ${firstName}`,
+        html: renderMail
+      };
+      await transporter.sendMail(mailOptions);
+      console.log("Welcome email sent");
+    } catch (emailError) {
+      console.log("WELCOME EMAIL FAILED:", emailError.message);
+    }
 
+    // ✅ res.send() comes LAST
     res.status(201).send({
       message: "User created successfully",
-      data: {
-        lastName,
-        firstName,
-        email,
-        roles: user.roles,
-      },
+      data: { lastName, firstName, email, roles: user.roles },
       token,
     });
 
-     let mailOptions = {
-  from: process.env.NODE_MAIL,
-  bcc: [email],
-  subject: `Welcome, ${firstName}`,
-  //use "to" if you want the user to see other emails
-  html:renderMail
-};
-
-transporter.sendMail(mailOptions, function(error, info){
-  if (error) {
-    console.log(error);
-  } else {
-    console.log('Email sent: ' + info.response);
-  }
-
-
-});
   } catch (error) {
     console.log(error);
-
     if (error.code == 11000) {
       return res.status(400).send({ message: "User already exist" });
     }
-
     res.status(400).send({ message: "User creation failed" });
   }
 };
-
 const login = async (req, res) => {
   const { email, password } = req.body;
   try {
