@@ -31,10 +31,9 @@ const generateToken = (user) =>
 
 
 // ─────────────────────────────────────────
-// FORGOT PASSWORD — sends OTP via crypto (alternative flow)
+// FORGOT PASSWORD 
 // POST /api/v1/auth/forgot-password
 // ─────────────────────────────────────────
-// Replace your existing forgotPassword function with this
 const forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -51,7 +50,7 @@ const forgotPassword = async (req, res) => {
             });
         }
 
-        const sendOTP = otpgen.generate(4, {
+        const sendOTP = otpgen.generate(6, {
             upperCaseAlphabets: false,
             specialChars: false,
             lowerCaseAlphabets: false,

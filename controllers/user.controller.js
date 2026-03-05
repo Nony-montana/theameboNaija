@@ -333,7 +333,7 @@ const requestOTP = async (req, res) => {
       return res.status(404).send({ message: "User not found" });
     }
 
-    const sendOTP = otpgen.generate(4, {
+    const sendOTP = otpgen.generate(6, {
       upperCaseAlphabets: false,
       specialChars: false,
       lowerCaseAlphabets: false,
