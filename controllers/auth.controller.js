@@ -34,6 +34,7 @@ const generateToken = (user) =>
 // FORGOT PASSWORD — sends OTP via crypto (alternative flow)
 // POST /api/v1/auth/forgot-password
 // ─────────────────────────────────────────
+// Replace your existing forgotPassword function with this
 const forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -43,25 +44,26 @@ const forgotPassword = async (req, res) => {
 
         const user = await UserModel.findOne({ email });
 
-        // Always return 200 — prevents email enumeration attacks
+        // Always return 200 — prevents email enumeration
         if (!user) {
             return res.status(200).send({
                 message: "If an account with that email exists, an OTP has been sent",
             });
         }
 
-        // Generate a 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const sendOTP = otpgen.generate(4, {
+            upperCaseAlphabets: false,
+            specialChars: false,
+            lowerCaseAlphabets: false,
+            digits: true,
+        });
 
-        // Hash before storing — never save raw OTPs in the DB
-        const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
-
-        user.resetPasswordOtp = hashedOtp;
-        user.resetPasswordOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-        await user.save();
+        // ✅ Store in OTPModel (same as requestOTP — so verifyOtp can find it)
+        await OTPModel.deleteMany({ email });
+        await OTPModel.create({ email, otp: sendOTP });
 
         const otpMailContent = await mailSender("otpMail.ejs", {
-            otp,
+            otp: sendOTP,
             firstName: user.firstName,
         });
 
@@ -88,7 +90,6 @@ const forgotPassword = async (req, res) => {
         res.status(500).send({ message: "Failed to send OTP", error: error.message });
     }
 };
-
 // ─────────────────────────────────────────
 // VERIFY OTP — STEP 2
 // POST /api/v1/auth/verify-otp
