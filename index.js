@@ -21,23 +21,30 @@ app.use("/api/v1/auth", authRoutes);
 
 
 
-app.listen(process.env.PORT, (err)=>{
-    if(err){
-        console.log('error starting server', err)
-    }else{
-        console.log(`server started successfully`);
-    }
+// app.listen(process.env.PORT, (err)=>{
+//     if(err){
+//         console.log('error starting server', err)
+//     }else{
+//         console.log(`server started successfully`);
+//     }
 
-})
+// })
 
 
-
-mongoose.connect(process.env.DATABASE_URI, {
-    serverSelectionTimeoutMS: 10000,
-    bufferCommands: false,
-})
-.then(() => console.log("Database connected successfully"))
-.catch((err) => console.log("Failed to connect to DB:", err.message));
+mongoose.connect(process.env.DATABASE_URI)
+    .then(() => {
+        console.log("Database connected successfully");
+        app.listen(process.env.PORT, (err) => {
+            if (err) {
+                console.log('error starting server', err);
+            } else {
+                console.log(`server started successfully`);
+            }
+        });
+    })
+    .catch(() => {
+        console.log("Failed to connect to DB");
+    });
 
     // origin:"http://localhost:5173", 
     // credentials:true
