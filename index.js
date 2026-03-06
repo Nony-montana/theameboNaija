@@ -32,13 +32,12 @@ app.listen(process.env.PORT, (err)=>{
 
 
 
-mongoose.connect(process.env.DATABASE_URI)
-.then(()=>{
-    console.log("Database connected successfully")
+mongoose.connect(process.env.DATABASE_URI, {
+    serverSelectionTimeoutMS: 10000,
+    bufferCommands: false,
 })
-.catch(()=>{
-    console.log("Failed to connect to DB")
-})
+.then(() => console.log("Database connected successfully"))
+.catch((err) => console.log("Failed to connect to DB:", err.message));
 
     // origin:"http://localhost:5173", 
     // credentials:true
