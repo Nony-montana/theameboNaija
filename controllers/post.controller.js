@@ -1,6 +1,9 @@
 const { cloudinary } = require("../config/cloudinary");
+const mailSender = require("../middleware/mail");
 const PostModel = require("../models/post.model");
 const UserModel = require("../models/user.model");
+const nodemailer = require("nodemailer");
+
 
 // =====================
 // HELPER FUNCTION
@@ -13,6 +16,14 @@ const generateSlug = (title) => {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 };
+
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: process.env.NODE_MAIL,
+        pass: process.env.NODE_PASS,
+    },
+});
 
 // =====================
 // CREATE A POST
@@ -234,11 +245,8 @@ const approvePost = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    // Only admins can approve
     if (req.user.roles !== "admin") {
-      return res.status(403).send({
-        message: "Only admins can approve posts",
-      });
+      return res.status(403).send({ message: "Only admins can approve posts" });
     }
 
     const post = await PostModel.findOneAndUpdate(
@@ -249,11 +257,33 @@ const approvePost = async (req, res) => {
         approvedAt: new Date(),
         status: "published",
       },
-      { new: true },
-    );
+      { new: true }
+    ).populate("author", "firstName lastName email");
 
     if (!post) {
       return res.status(404).send({ message: "Post not found" });
+    }
+
+    // Send approval email to author
+    try {
+      const emailContent = await mailSender("approvedMail.ejs", {
+        firstName: post.author.firstName,
+        postTitle: post.title,
+        category: post.category,
+        postUrl: `https://amebonaija.vercel.app/post/${post.slug}`,
+      });
+
+      await transporter.sendMail({
+        from: process.env.NODE_MAIL,
+        to: post.author.email,
+        subject: "🎉 Your Post is Live on Amebo Naija!",
+        html: emailContent,
+      });
+
+      console.log("Approval email sent to:", post.author.email);
+    } catch (emailError) {
+      console.log("Approval email failed:", emailError.message);
+      // Don't block the response if email fails
     }
 
     res.status(200).send({
@@ -274,19 +304,37 @@ const rejectPost = async (req, res) => {
     const { slug } = req.params;
 
     if (req.user.roles !== "admin") {
-      return res.status(403).send({
-        message: "Only admins can reject posts",
-      });
+      return res.status(403).send({ message: "Only admins can reject posts" });
     }
 
     const post = await PostModel.findOneAndUpdate(
       { slug },
       { status: "rejected", isApproved: false },
-      { new: true },
-    );
+      { new: true }
+    ).populate("author", "firstName lastName email");
 
     if (!post) {
       return res.status(404).send({ message: "Post not found" });
+    }
+
+    // Send rejection email to author
+    try {
+      const emailContent = await mailSender("rejectedMail.ejs", {
+        firstName: post.author.firstName,
+        postTitle: post.title,
+        category: post.category,
+      });
+
+      await transporter.sendMail({
+        from: process.env.NODE_MAIL,
+        to: post.author.email,
+        subject: "📋 Update on Your Amebo Naija Post Submission",
+        html: emailContent,
+      });
+
+      console.log("Rejection email sent to:", post.author.email);
+    } catch (emailError) {
+      console.log("Rejection email failed:", emailError.message);
     }
 
     res.status(200).send({
@@ -298,7 +346,6 @@ const rejectPost = async (req, res) => {
     res.status(500).send({ message: "Failed to reject post" });
   }
 };
-
 // ADMIN PREVIEW - can see any post regardless of status
 const previewPost = async (req, res) => {
   try {
