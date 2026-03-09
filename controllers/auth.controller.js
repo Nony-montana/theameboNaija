@@ -268,7 +268,7 @@ const changePasswordWithOTP = async (req, res) => {
 
         // Send confirmation email
         try {
-            const emailContent = await mailSender("resetPasswordMail.ejs", {
+            const emailContent = await mailSender("changePasswordMail.ejs", {
                 firstName: user.firstName,
                 email: user.email,
             });
