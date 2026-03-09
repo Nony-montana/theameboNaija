@@ -370,7 +370,44 @@ const requestOTP = async (req, res) => {
   }
 };
 
+// =====================
+// GET AUTHOR PROFILE
+// GET /api/v1/users/:id/profile
+// Public route
+// =====================
+const getAuthorProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    const author = await UserModel.findById(id).select(
+      "firstName lastName createdAt"
+    );
+
+    if (!author) {
+      return res.status(404).send({ message: "Author not found" });
+    }
+
+    const posts = await PostModel.find({
+      author: id,
+      status: "published",
+      isApproved: true,
+    })
+      .populate("author", "firstName lastName")
+      .sort({ createdAt: -1 });
+
+    res.status(200).send({
+      message: "Author profile fetched successfully",
+      data: {
+        author,
+        posts,
+        totalPosts: posts.length,
+      },
+    });
+  } catch (error) {
+    console.log("GET AUTHOR PROFILE ERROR:", error.message);
+    res.status(500).send({ message: "Failed to fetch author profile" });
+  }
+};
 
 module.exports = {
   createUser,
@@ -382,5 +419,6 @@ module.exports = {
   updateUserRole,
   updateUserStatus,
   adminDeleteUser,
-  requestOTP
+  requestOTP,
+  getAuthorProfile
 };

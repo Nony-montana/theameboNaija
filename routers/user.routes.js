@@ -9,7 +9,8 @@ const {
   updateUserRole,
   updateUserStatus,
   adminDeleteUser,
-  requestOTP
+  requestOTP,
+  getAuthorProfile
 } = require("../controllers/user.controller");
 const router = express.Router();
 
@@ -22,5 +23,6 @@ router.get("/me", verifyUser, getMe);
 router.put("/admin/users/:userId/role", verifyUser, updateUserRole);
 router.put("/admin/users/:userId/status", verifyUser, updateUserStatus);
 router.delete("/admin/users/:userId", verifyUser, adminDeleteUser);
+router.get("/users/:id/profile", getAuthorProfile);
 
 module.exports = router;
