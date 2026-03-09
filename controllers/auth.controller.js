@@ -160,6 +160,26 @@ const resetPassword = async (req, res) => {
         user.password = await bcrypt.hash(password, salt);
         await user.save();
 
+        // Send confirmation email
+        try {
+            const emailContent = await mailSender("resetPasswordMail.ejs", {
+                firstName: user.firstName,
+                email: user.email,
+            });
+
+            await transporter.sendMail({
+                from: process.env.NODE_MAIL,
+                to: user.email,
+                subject: "🔐 Your Amebo Naija Password Has Been Reset",
+                html: emailContent,
+            });
+
+            console.log("Password reset confirmation email sent to:", user.email);
+        } catch (emailError) {
+            console.log("Reset confirmation email failed:", emailError.message);
+            // Don't block the response if email fails
+        }
+
         res.status(200).send({ message: "Password reset successful. You can now log in." });
 
     } catch (error) {
