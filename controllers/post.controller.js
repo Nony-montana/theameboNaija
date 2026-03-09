@@ -78,7 +78,7 @@ const createPost = async (req, res) => {
 // =====================
 const getAllPosts = async (req, res) => {
   try {
-    const { category, tag, page = 1, limit = 12 } = req.query;
+    const { category, tag, page = 1, limit = 11 } = req.query;
 
     // Only show posts that are published AND approved by admin
     const filter = { status: "published", isApproved: true };
