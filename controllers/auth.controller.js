@@ -232,11 +232,10 @@ const updateProfile = async (req, res) => {
 // Protected (verifyUser)
 // Flow: OTP + current password + new password
 // =====================================================
-const  changePasswordWithOTP = async (req, res) => {
+const changePasswordWithOTP = async (req, res) => {
     try {
         const { otp, currentPassword, newPassword, confirmNewPassword } = req.body;
 
-        // Validate all fields
         if (!otp || !currentPassword || !newPassword || !confirmNewPassword)
             return res.status(400).send({ message: "All fields are required" });
 
@@ -249,27 +248,42 @@ const  changePasswordWithOTP = async (req, res) => {
         if (currentPassword === newPassword)
             return res.status(400).send({ message: "New password must be different from current password" });
 
-        // Get user with email (needed for OTP lookup)
         const user = await UserModel.findById(req.user.id).select("+password");
         if (!user)
             return res.status(404).send({ message: "User not found" });
 
-        // Verify OTP
         const otpRecord = await OTPModel.findOne({ email: user.email, otp });
         if (!otpRecord)
             return res.status(400).send({ message: "Invalid or expired OTP" });
 
-        // Verify current password
         const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch)
             return res.status(401).send({ message: "Current password is incorrect" });
 
-        // All checks passed — delete OTP and update password
         await OTPModel.deleteMany({ email: user.email });
 
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
+
+        // Send confirmation email
+        try {
+            const emailContent = await mailSender("resetPasswordMail.ejs", {
+                firstName: user.firstName,
+                email: user.email,
+            });
+
+            await transporter.sendMail({
+                from: process.env.NODE_MAIL,
+                to: user.email,
+                subject: "🔐 Your Amebo Naija Password Has Been Changed",
+                html: emailContent,
+            });
+
+            console.log("Change password confirmation email sent to:", user.email);
+        } catch (emailError) {
+            console.log("Change password email failed:", emailError.message);
+        }
 
         res.status(200).send({ message: "Password changed successfully" });
 
