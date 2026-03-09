@@ -1,4 +1,5 @@
 const PostModel = require("../models/post.model");
+const UserModel = require("../models/user.model");
 // =====================
 // TOGGLE BOOKMARK
 // POST /api/v1/bookmark/:postId
