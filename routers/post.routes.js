@@ -33,8 +33,9 @@ const {
 router.get("/posts", getAllPosts);
 router.get("/posts/search", searchPosts);
 router.get("/posts/trending", getTrendingPosts);
-router.get("/posts/:slug", getSinglePost);
 router.get("/my-posts", verifyUser, getMyPosts);
+router.get("/posts/preview/:slug", verifyUser, previewPost); 
+router.get("/posts/:slug", getSinglePost);
 
 // Post CRUD
 router.post("/posts", verifyUser, createPost);
@@ -51,7 +52,7 @@ router.put("/posts/:slug/comment/:commentId", verifyUser, editComment);
 // Admin only routes
 router.get("/posts/admin/pending", verifyUser, getPendingPosts);
 router.put("/posts/:slug/approve", verifyUser, approvePost);
-router.get("/posts/admin/preview/:slug", verifyUser, previewPost);
+// router.get("/posts/admin/preview/:slug", verifyUser, previewPost);
 router.put("/posts/:slug/reject", verifyUser, rejectPost);
 router.get("/admin/stats", verifyUser, getAdminStats);
 router.get("/admin/posts", verifyUser, adminGetAllPosts);
