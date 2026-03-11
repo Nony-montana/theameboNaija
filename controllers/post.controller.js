@@ -2,6 +2,7 @@ const { cloudinary } = require("../config/cloudinary");
 const mailSender = require("../middleware/mail");
 const PostModel = require("../models/post.model");
 const UserModel = require("../models/user.model");
+const NotificationModel = require("../models/notification.model");
 const nodemailer = require("nodemailer");
 
 
@@ -14,7 +15,8 @@ const generateSlug = (title) => {
     .trim()
     .replace(/[^a-z0-9 -]/g, "")
     .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+    .replace(/-+/g, "-")
+    .slice(0, 80);
 };
 
 const transporter = nodemailer.createTransport({
@@ -41,7 +43,6 @@ const createPost = async (req, res) => {
       });
     }
 
-    // Upload base64 image to Cloudinary if provided
     let imageUrl = "";
     if (image && image.startsWith("data:image")) {
       const uploadResult = await cloudinary.uploader.upload(image, {
@@ -73,14 +74,15 @@ const createPost = async (req, res) => {
       error: error.message,
     });
   }
-}; // =====================
+};
+
+// =====================
 // GET ALL PUBLISHED & APPROVED POSTS
 // =====================
 const getAllPosts = async (req, res) => {
   try {
     const { category, tag, page = 1, limit = 11 } = req.query;
 
-    // Only show posts that are published AND approved by admin
     const filter = { status: "published", isApproved: true };
     if (category) filter.category = category;
     if (tag) filter.tags = tag;
@@ -104,9 +106,7 @@ const getAllPosts = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).send({
-      message: "Failed to fetch posts",
-    });
+    res.status(500).send({ message: "Failed to fetch posts" });
   }
 };
 
@@ -126,12 +126,9 @@ const getSinglePost = async (req, res) => {
       .populate("comments.user", "firstName lastName");
 
     if (!post) {
-      return res.status(404).send({
-        message: "Post not found",
-      });
+      return res.status(404).send({ message: "Post not found" });
     }
 
-    // Increase view count by 1 every time someone opens the post
     post.views += 1;
     await post.save();
 
@@ -141,9 +138,7 @@ const getSinglePost = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).send({
-      message: "Failed to fetch post",
-    });
+    res.status(500).send({ message: "Failed to fetch post" });
   }
 };
 
@@ -161,64 +156,39 @@ const updatePost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
-    // Only the author or an admin can edit
     if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res.status(403).send({
-        message: "You are not allowed to edit this post",
-      });
+      return res.status(403).send({ message: "You are not allowed to edit this post" });
     }
 
-    // Build a controlled update object instead of spreading req.body directly.
-    // Spreading req.body is dangerous — it allows clients to overwrite any field
-    // on the document (e.g. author, isApproved, roles) by simply sending it in the request.
     const updateData = {
       title: title || post.title,
       content: req.body.content || post.content,
       category: req.body.category || post.category,
-      // FIX: Respect the status the user chose (draft or pending).
-      // Previously this was hardcoded to "pending", ignoring the user's choice to save as draft.
       status: status === "draft" ? "draft" : "pending",
     };
 
-    // FIX: Parse tags sent as a JSON string from the frontend FormData.
-    // Previously used repeated tags[] keys which are unreliable across multer configs.
     if (req.body.tags) {
       try {
         updateData.tags = JSON.parse(req.body.tags);
       } catch {
-        // Fallback: if someone sends a plain comma-separated string
-        updateData.tags = req.body.tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean);
+        updateData.tags = req.body.tags.split(",").map((t) => t.trim()).filter(Boolean);
       }
     }
 
-    // CloudinaryStorage (in config/cloudinary.js) uploads the image automatically
-    // before the request even reaches this controller. The resulting Cloudinary
-    // URL is stored in req.file.path — no manual upload call needed.
     if (req.file) {
       updateData.image = req.file.path;
     }
 
-    // FIX: Only regenerate slug when the title actually changes.
-    // Previously it regenerated the slug on every edit even if the title was unchanged,
-    // and always set it from title even if the title wasn't sent.
     if (title && title !== post.title) {
       updateData.slug = generateSlug(title);
     }
 
-    // Reset approval fields so admin can re-review the updated post.
-    // Only do this when the user is actually submitting for review, not saving a draft.
     if (updateData.status === "pending") {
       updateData.isApproved = false;
       updateData.approvedBy = null;
       updateData.approvedAt = null;
     }
 
-    // FIX: Query by _id instead of slug, since slug may have just changed above.
-    // Using the old slug to query after it has been updated would still work here
-    // (findOneAndUpdate is atomic), but using _id is clearer and safer.
     const updatedPost = await PostModel.findByIdAndUpdate(
       post._id,
       updateData,
@@ -226,18 +196,15 @@ const updatePost = async (req, res) => {
     );
 
     res.status(200).send({
-      message:
-        "Post updated successfully, it will be reviewed by an admin before publishing",
+      message: "Post updated successfully, it will be reviewed by an admin before publishing",
       data: updatedPost,
     });
   } catch (error) {
     console.log("UPDATE POST ERROR:", error.message);
-    res.status(500).send({
-      message: "Failed to update post",
-      error: error.message,
-    });
+    res.status(500).send({ message: "Failed to update post", error: error.message });
   }
 };
+
 // =====================
 // APPROVE A POST (admin only)
 // =====================
@@ -264,7 +231,21 @@ const approvePost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
-    // Send approval email to author
+    // Create notification for the author
+    try {
+      await NotificationModel.create({
+        recipient: post.author._id,
+        sender: req.user.id,
+        type: "approved",
+        message: `🎉 Your post has been approved and is now live!`,
+        postSlug: post.slug,
+        postTitle: post.title,
+      });
+    } catch (notifError) {
+      console.log("Approval notification failed:", notifError.message);
+    }
+
+    // Send approval email
     try {
       const emailContent = await mailSender("approvedMail.ejs", {
         firstName: post.author.firstName,
@@ -279,11 +260,8 @@ const approvePost = async (req, res) => {
         subject: "🎉 Your Post is Live on Amebo Naija!",
         html: emailContent,
       });
-
-      console.log("Approval email sent to:", post.author.email);
     } catch (emailError) {
       console.log("Approval email failed:", emailError.message);
-      // Don't block the response if email fails
     }
 
     res.status(200).send({
@@ -317,7 +295,21 @@ const rejectPost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
-    // Send rejection email to author
+    // Create notification for the author
+    try {
+      await NotificationModel.create({
+        recipient: post.author._id,
+        sender: req.user.id,
+        type: "rejected",
+        message: `❌ Your post was not approved. Please review and resubmit.`,
+        postSlug: post.slug,
+        postTitle: post.title,
+      });
+    } catch (notifError) {
+      console.log("Rejection notification failed:", notifError.message);
+    }
+
+    // Send rejection email
     try {
       const emailContent = await mailSender("rejectedMail.ejs", {
         firstName: post.author.firstName,
@@ -331,22 +323,20 @@ const rejectPost = async (req, res) => {
         subject: "📋 Update on Your Amebo Naija Post Submission",
         html: emailContent,
       });
-
-      console.log("Rejection email sent to:", post.author.email);
     } catch (emailError) {
       console.log("Rejection email failed:", emailError.message);
     }
 
-    res.status(200).send({
-      message: "Post rejected",
-      data: post,
-    });
+    res.status(200).send({ message: "Post rejected", data: post });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to reject post" });
   }
 };
-// ADMIN PREVIEW - can see any post regardless of status
+
+// =====================
+// PREVIEW POST
+// =====================
 const previewPost = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -359,20 +349,14 @@ const previewPost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
-    // Allow access if the requester is admin OR the post's own author
     const isAdmin = req.user.roles === "admin";
     const isAuthor = post.author._id.toString() === req.user.id;
 
     if (!isAdmin && !isAuthor) {
-      return res
-        .status(403)
-        .send({ message: "You are not allowed to preview this post" });
+      return res.status(403).send({ message: "You are not allowed to preview this post" });
     }
 
-    res.status(200).send({
-      message: "Post fetched successfully",
-      data: post,
-    });
+    res.status(200).send({ message: "Post fetched successfully", data: post });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to fetch post" });
@@ -385,9 +369,7 @@ const previewPost = async (req, res) => {
 const getPendingPosts = async (req, res) => {
   try {
     if (req.user.roles !== "admin") {
-      return res.status(403).send({
-        message: "Only admins can view pending posts",
-      });
+      return res.status(403).send({ message: "Only admins can view pending posts" });
     }
 
     const posts = await PostModel.find({ status: "pending" })
@@ -413,7 +395,7 @@ const likePost = async (req, res) => {
     const { slug } = req.params;
     const userId = req.user.id;
 
-    const post = await PostModel.findOne({ slug });
+    const post = await PostModel.findOne({ slug }).populate("author", "firstName lastName");
 
     if (!post) {
       return res.status(404).send({ message: "Post not found" });
@@ -425,6 +407,22 @@ const likePost = async (req, res) => {
       post.likes = post.likes.filter((id) => id.toString() !== userId);
     } else {
       post.likes.push(userId);
+
+      // Notify the author only when liking (not unliking), and not if they like their own post
+      if (post.author._id.toString() !== userId) {
+        try {
+          await NotificationModel.create({
+            recipient: post.author._id,
+            sender: userId,
+            type: "like",
+            message: `❤️ Someone liked your post!`,
+            postSlug: post.slug,
+            postTitle: post.title,
+          });
+        } catch (notifError) {
+          console.log("Like notification failed:", notifError.message);
+        }
+      }
     }
 
     await post.save();
@@ -452,14 +450,10 @@ const sharePost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
-    // Increase share count by 1
     post.shares += 1;
     await post.save();
 
-    res.status(200).send({
-      message: "Post shared successfully",
-      totalShares: post.shares,
-    });
+    res.status(200).send({ message: "Post shared successfully", totalShares: post.shares });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to share post" });
@@ -473,19 +467,32 @@ const addComment = async (req, res) => {
   try {
     const { slug } = req.params;
     const { text } = req.body;
+    const userId = req.user.id;
 
-    const post = await PostModel.findOne({ slug });
+    const post = await PostModel.findOne({ slug }).populate("author", "firstName lastName");
 
     if (!post) {
       return res.status(404).send({ message: "Post not found" });
     }
 
-    post.comments.push({
-      user: req.user.id,
-      text,
-    });
-
+    post.comments.push({ user: userId, text });
     await post.save();
+
+    // Notify the author, but not if they comment on their own post
+    if (post.author._id.toString() !== userId) {
+      try {
+        await NotificationModel.create({
+          recipient: post.author._id,
+          sender: userId,
+          type: "comment",
+          message: `💬 Someone commented on your post!`,
+          postSlug: post.slug,
+          postTitle: post.title,
+        });
+      } catch (notifError) {
+        console.log("Comment notification failed:", notifError.message);
+      }
+    }
 
     res.status(201).send({
       message: "Comment added successfully",
@@ -506,21 +513,14 @@ const deleteComment = async (req, res) => {
 
     const post = await PostModel.findOne({ slug });
 
-    if (!post) {
-      return res.status(404).send({ message: "Post not found" });
-    }
+    if (!post) return res.status(404).send({ message: "Post not found" });
 
     const comment = post.comments.id(commentId);
 
-    if (!comment) {
-      return res.status(404).send({ message: "Comment not found" });
-    }
+    if (!comment) return res.status(404).send({ message: "Comment not found" });
 
-    // Only the comment owner or an admin can delete a comment
     if (comment.user.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res
-        .status(403)
-        .send({ message: "You are not allowed to delete this comment" });
+      return res.status(403).send({ message: "You are not allowed to delete this comment" });
     }
 
     comment.deleteOne();
@@ -535,7 +535,6 @@ const deleteComment = async (req, res) => {
 
 // =====================
 // EDIT A COMMENT
-// PUT /api/v1/posts/:slug/comment/:commentId
 // =====================
 const editComment = async (req, res) => {
   try {
@@ -548,21 +547,14 @@ const editComment = async (req, res) => {
 
     const post = await PostModel.findOne({ slug });
 
-    if (!post) {
-      return res.status(404).send({ message: "Post not found" });
-    }
+    if (!post) return res.status(404).send({ message: "Post not found" });
 
     const comment = post.comments.id(commentId);
 
-    if (!comment) {
-      return res.status(404).send({ message: "Comment not found" });
-    }
+    if (!comment) return res.status(404).send({ message: "Comment not found" });
 
-    // Only the comment owner or an admin can edit
     if (comment.user.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .send({ message: "You are not allowed to edit this comment" });
+      return res.status(403).send({ message: "You are not allowed to edit this comment" });
     }
 
     comment.text = text.trim();
@@ -575,9 +567,9 @@ const editComment = async (req, res) => {
     res.status(500).send({ message: "Failed to edit comment" });
   }
 };
+
 // =====================
-// DELETE A POST (author or admin)
-// DELETE /api/v1/posts/:slug
+// DELETE A POST
 // =====================
 const deletePost = async (req, res) => {
   try {
@@ -585,15 +577,10 @@ const deletePost = async (req, res) => {
 
     const post = await PostModel.findOne({ slug });
 
-    if (!post) {
-      return res.status(404).send({ message: "Post not found" });
-    }
+    if (!post) return res.status(404).send({ message: "Post not found" });
 
-    // Only the author or an admin can delete
     if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res
-        .status(403)
-        .send({ message: "You are not allowed to delete this post" });
+      return res.status(403).send({ message: "You are not allowed to delete this post" });
     }
 
     await PostModel.findByIdAndDelete(post._id);
@@ -601,9 +588,7 @@ const deletePost = async (req, res) => {
     res.status(200).send({ message: "Post deleted successfully" });
   } catch (error) {
     console.log("DELETE POST ERROR:", error.message);
-    res
-      .status(500)
-      .send({ message: "Failed to delete post", error: error.message });
+    res.status(500).send({ message: "Failed to delete post", error: error.message });
   }
 };
 
@@ -614,9 +599,7 @@ const searchPosts = async (req, res) => {
   try {
     const { q } = req.query;
 
-    if (!q) {
-      return res.status(400).send({ message: "Please provide a search term" });
-    }
+    if (!q) return res.status(400).send({ message: "Please provide a search term" });
 
     const posts = await PostModel.find({
       status: "published",
@@ -630,35 +613,25 @@ const searchPosts = async (req, res) => {
       .populate("author", "firstName lastName")
       .sort({ createdAt: -1 });
 
-    res.status(200).send({
-      message: "Search results",
-      total: posts.length,
-      data: posts,
-    });
+    res.status(200).send({ message: "Search results", total: posts.length, data: posts });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Search failed" });
   }
 };
 
-// GET MY POSTS (logged in user's posts)
+// =====================
+// GET MY POSTS
+// =====================
 const getMyPosts = async (req, res) => {
   try {
-    const posts = await PostModel.find({ author: req.user.id }).sort({
-      createdAt: -1,
-    });
+    const posts = await PostModel.find({ author: req.user.id }).sort({ createdAt: -1 });
 
     if (posts.length === 0) {
-      return res.status(404).send({
-        message: "You have not created any posts yet",
-      });
+      return res.status(404).send({ message: "You have not created any posts yet" });
     }
 
-    res.status(200).send({
-      message: "Your posts fetched successfully",
-      total: posts.length,
-      data: posts,
-    });
+    res.status(200).send({ message: "Your posts fetched successfully", total: posts.length, data: posts });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to fetch your posts" });
@@ -666,22 +639,16 @@ const getMyPosts = async (req, res) => {
 };
 
 // =====================
-// GET TRENDING POSTS (most viewed)
+// GET TRENDING POSTS
 // =====================
 const getTrendingPosts = async (req, res) => {
   try {
-    const posts = await PostModel.find({
-      status: "published",
-      isApproved: true,
-    })
+    const posts = await PostModel.find({ status: "published", isApproved: true })
       .populate("author", "firstName lastName")
       .sort({ views: -1 })
       .limit(10);
 
-    res.status(200).send({
-      message: "Trending posts fetched successfully",
-      data: posts,
-    });
+    res.status(200).send({ message: "Trending posts fetched successfully", data: posts });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to fetch trending posts" });
@@ -690,8 +657,6 @@ const getTrendingPosts = async (req, res) => {
 
 // =====================
 // GET ADMIN STATS
-// GET /api/v1/admin/stats
-// Admin only
 // =====================
 const getAdminStats = async (req, res) => {
   try {
@@ -699,20 +664,11 @@ const getAdminStats = async (req, res) => {
       return res.status(403).send({ message: "Access denied" });
     }
 
-    // Run all queries in parallel for speed
     const [
-      totalPosts,
-      totalUsers,
-      totalComments,
-      pendingPosts,
-      publishedPosts,
-      draftPosts,
-      rejectedPosts,
-      categoryBreakdown,
-      recentPosts,
-      recentUsers,
+      totalPosts, totalUsers, totalComments,
+      pendingPosts, publishedPosts, draftPosts, rejectedPosts,
+      categoryBreakdown, recentPosts, recentUsers,
     ] = await Promise.all([
-      // Total counts
       PostModel.countDocuments(),
       UserModel.countDocuments(),
       PostModel.aggregate([
@@ -723,42 +679,24 @@ const getAdminStats = async (req, res) => {
       PostModel.countDocuments({ status: "published" }),
       PostModel.countDocuments({ status: "draft" }),
       PostModel.countDocuments({ status: "rejected" }),
-
-      // Posts per category
       PostModel.aggregate([
         { $group: { _id: "$category", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
-
-      // 5 most recent posts
-      PostModel.find()
-        .populate("author", "firstName lastName")
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select("title status category createdAt author"),
-
-      // 5 most recent users
-      UserModel.find()
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select("firstName lastName email roles createdAt"),
+      PostModel.find().populate("author", "firstName lastName").sort({ createdAt: -1 }).limit(5).select("title status category createdAt author"),
+      UserModel.find().sort({ createdAt: -1 }).limit(5).select("firstName lastName email roles createdAt"),
     ]);
 
     res.status(200).send({
       message: "Admin stats fetched successfully",
       data: {
         totals: {
-          posts: totalPosts,
-          users: totalUsers,
+          posts: totalPosts, users: totalUsers,
           comments: totalComments[0]?.total || 0,
-          pending: pendingPosts,
-          published: publishedPosts,
-          drafts: draftPosts,
-          rejected: rejectedPosts,
+          pending: pendingPosts, published: publishedPosts,
+          drafts: draftPosts, rejected: rejectedPosts,
         },
-        categoryBreakdown,
-        recentPosts,
-        recentUsers,
+        categoryBreakdown, recentPosts, recentUsers,
       },
     });
   } catch (error) {
@@ -768,14 +706,11 @@ const getAdminStats = async (req, res) => {
 };
 
 // =====================
-// GET ALL POSTS (admin)
-// GET /api/v1/admin/posts
+// ADMIN GET ALL POSTS
 // =====================
 const adminGetAllPosts = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") {
-      return res.status(403).send({ message: "Access denied" });
-    }
+    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
 
     const { page = 1, limit = 15, search, category, status } = req.query;
     const skip = (page - 1) * limit;
@@ -791,19 +726,11 @@ const adminGetAllPosts = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit))
-        .select(
-          "title category status views likes comments shares createdAt author slug image",
-        ),
+        .select("title category status views likes comments shares createdAt author slug image"),
       PostModel.countDocuments(filter),
     ]);
 
-    res.status(200).send({
-      message: "Posts fetched successfully",
-      total,
-      page: Number(page),
-      totalPages: Math.ceil(total / limit),
-      data: posts,
-    });
+    res.status(200).send({ message: "Posts fetched successfully", total, page: Number(page), totalPages: Math.ceil(total / limit), data: posts });
   } catch (error) {
     console.log("ADMIN GET ALL POSTS ERROR:", error.message);
     res.status(500).send({ message: "Failed to fetch posts" });
@@ -812,13 +739,10 @@ const adminGetAllPosts = async (req, res) => {
 
 // =====================
 // ADMIN DELETE POST
-// DELETE /api/v1/admin/posts/:slug
 // =====================
 const adminDeletePost = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") {
-      return res.status(403).send({ message: "Access denied" });
-    }
+    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
 
     const post = await PostModel.findOne({ slug: req.params.slug });
     if (!post) return res.status(404).send({ message: "Post not found" });
@@ -832,92 +756,57 @@ const adminDeletePost = async (req, res) => {
 };
 
 // =====================
-// GET ALL COMMENTS (admin)
-// GET /api/v1/admin/comments
+// ADMIN GET ALL COMMENTS
 // =====================
 const adminGetAllComments = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") {
-      return res.status(403).send({ message: "Access denied" });
-    }
+    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
 
     const { page = 1, limit = 20, search } = req.query;
     const skip = (page - 1) * Number(limit);
 
-    // Step 1: get all posts that have at least one comment
     const posts = await PostModel.find({ "comments.0": { $exists: true } })
       .populate("comments.user", "firstName lastName email")
       .select("title slug comments");
 
-    // Step 2: flatten all comments into one array with post info attached
     let allComments = [];
     for (const post of posts) {
       for (const comment of post.comments) {
         allComments.push({
-          postId: post._id,
-          postTitle: post.title,
-          postSlug: post.slug,
-          comment: {
-            _id: comment._id,
-            text: comment.text,
-            editedAt: comment.editedAt,
-            createdAt: comment.createdAt,
-          },
-          commenter: comment.user
-            ? {
-                _id: comment.user._id,
-                firstName: comment.user.firstName,
-                lastName: comment.user.lastName,
-                email: comment.user.email,
-              }
-            : null,
+          postId: post._id, postTitle: post.title, postSlug: post.slug,
+          comment: { _id: comment._id, text: comment.text, editedAt: comment.editedAt, createdAt: comment.createdAt },
+          commenter: comment.user ? { _id: comment.user._id, firstName: comment.user.firstName, lastName: comment.user.lastName, email: comment.user.email } : null,
         });
       }
     }
 
-    // Step 3: sort newest first
-    allComments.sort(
-      (a, b) => new Date(b.comment.createdAt) - new Date(a.comment.createdAt),
-    );
+    allComments.sort((a, b) => new Date(b.comment.createdAt) - new Date(a.comment.createdAt));
 
-    // Step 4: apply search filter if provided
     if (search) {
       const term = search.toLowerCase();
-      allComments = allComments.filter(
-        (item) =>
-          item.comment.text?.toLowerCase().includes(term) ||
-          item.commenter?.firstName?.toLowerCase().includes(term) ||
-          item.commenter?.lastName?.toLowerCase().includes(term),
+      allComments = allComments.filter((item) =>
+        item.comment.text?.toLowerCase().includes(term) ||
+        item.commenter?.firstName?.toLowerCase().includes(term) ||
+        item.commenter?.lastName?.toLowerCase().includes(term)
       );
     }
 
-    // Step 5: paginate
     const total = allComments.length;
     const paginated = allComments.slice(skip, skip + Number(limit));
 
-    res.status(200).send({
-      message: "Comments fetched successfully",
-      total,
-      page: Number(page),
-      totalPages: Math.ceil(total / Number(limit)),
-      data: paginated,
-    });
+    res.status(200).send({ message: "Comments fetched successfully", total, page: Number(page), totalPages: Math.ceil(total / Number(limit)), data: paginated });
   } catch (error) {
     console.log("ADMIN GET ALL COMMENTS ERROR:", error.message);
-    res
-      .status(500)
-      .send({ message: "Failed to fetch comments", error: error.message });
+    res.status(500).send({ message: "Failed to fetch comments", error: error.message });
   }
 };
+
 // =====================
 // ADMIN DELETE COMMENT
-// DELETE /api/v1/admin/posts/:slug/comment/:commentId
 // =====================
 const adminDeleteComment = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") {
-      return res.status(403).send({ message: "Access denied" });
-    }
+    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
 
     const { slug, commentId } = req.params;
 
@@ -938,26 +827,9 @@ const adminDeleteComment = async (req, res) => {
 };
 
 module.exports = {
-  createPost,
-  getAllPosts,
-  getSinglePost,
-  updatePost,
-  deletePost,
-  approvePost,
-  previewPost,
-  rejectPost,
-  getPendingPosts,
-  likePost,
-  sharePost,
-  addComment,
-  deleteComment,
-  editComment,
-  searchPosts,
-  getTrendingPosts,
-  getMyPosts,
-  getAdminStats,
-  adminGetAllPosts,
-  adminDeletePost,
-  adminGetAllComments,
-  adminDeleteComment,
+  createPost, getAllPosts, getSinglePost, updatePost, deletePost,
+  approvePost, previewPost, rejectPost, getPendingPosts,
+  likePost, sharePost, addComment, deleteComment, editComment,
+  searchPosts, getTrendingPosts, getMyPosts,
+  getAdminStats, adminGetAllPosts, adminDeletePost, adminGetAllComments, adminDeleteComment,
 };
