@@ -2,7 +2,14 @@ const express = require("express");
 const router = express.Router();
 const { verifyUser } = require("../controllers/user.controller");
 const { upload } = require("../config/cloudinary");
-const { getNotifications, markAsRead, markAllAsRead } = require("../controllers/notification.controller");
+const {
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  markAsUnread,
+  deleteAllNotifications,
+  deleteSingleNotification,
+} = require("../controllers/notification.controller");
 const {
   createPost,
   getAllPosts,
@@ -76,11 +83,18 @@ router.get("/admin/stats", verifyUser, getAdminStats);
 router.get("/admin/posts", verifyUser, adminGetAllPosts);
 router.delete("/admin/posts/:slug", verifyUser, adminDeletePost);
 router.get("/admin/comments", verifyUser, adminGetAllComments);
-router.delete("/admin/posts/:slug/comment/:commentId", verifyUser, adminDeleteComment);
+router.delete(
+  "/admin/posts/:slug/comment/:commentId",
+  verifyUser,
+  adminDeleteComment,
+);
 
 // Notification routes
 router.get("/notifications", verifyUser, getNotifications);
 router.put("/notifications/read-all", verifyUser, markAllAsRead);
 router.put("/notifications/:id/read", verifyUser, markAsRead);
+router.put("/notifications/:id/unread", verifyUser, markAsUnread);
+router.delete("/notifications/all", verifyUser, deleteAllNotifications);
+router.delete("/notifications/:id", verifyUser, deleteSingleNotification);
 
 module.exports = router;
