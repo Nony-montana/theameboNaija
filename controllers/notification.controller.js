@@ -1,5 +1,7 @@
 const NotificationModel = require("../models/notification.model");
 
+
+
 // GET all notifications for logged-in user
 const getNotifications = async (req, res) => {
   try {
