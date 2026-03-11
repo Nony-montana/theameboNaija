@@ -129,8 +129,17 @@ const getSinglePost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
-    post.views += 1;
-    await post.save();
+    // Use logged-in user ID or fall back to IP address for guests
+    const viewerId = req.user?.id || 
+      req.headers["x-forwarded-for"]?.split(",")[0].trim() || 
+      req.socket.remoteAddress;
+
+    // Only count view if this viewer hasn't seen this post before
+    if (viewerId && !post.viewers.includes(viewerId)) {
+      post.viewers.push(viewerId);
+      post.views += 1;
+      await post.save();
+    }
 
     res.status(200).send({
       message: "Post fetched successfully",

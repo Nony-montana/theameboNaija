@@ -35,6 +35,7 @@ const PostSchema = new mongoose.Schema(
       default: "draft",
     },
     views: { type: Number, default: 0 },
+     viewers: [{ type: String }],
     slug: { type: String, unique: true },
   },
   { timestamps: true },
