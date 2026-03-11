@@ -5,6 +5,7 @@ const NotificationModel = require("../models/notification.model");
 // GET all notifications for logged-in user
 const getNotifications = async (req, res) => {
   try {
+    console.log("GET NOTIFICATIONS - req.user:", req.user);
     const notifications = await NotificationModel.find({ recipient: req.user.id })
       .sort({ createdAt: -1 })
       .limit(20)
@@ -12,6 +13,7 @@ const getNotifications = async (req, res) => {
 
     res.status(200).json({ success: true, data: notifications });
   } catch (err) {
+    console.log("GET NOTIFICATIONS ERROR:", err.message);
     res.status(500).json({ success: false, message: "Failed to fetch notifications" });
   }
 };
