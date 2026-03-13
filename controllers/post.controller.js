@@ -5,7 +5,6 @@ const UserModel = require("../models/user.model");
 const NotificationModel = require("../models/notification.model");
 const nodemailer = require("nodemailer");
 
-
 // =====================
 // HELPER FUNCTION
 // =====================
@@ -20,11 +19,11 @@ const generateSlug = (title) => {
 };
 
 const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.NODE_MAIL,
-        pass: process.env.NODE_PASS,
-    },
+  service: "gmail",
+  auth: {
+    user: process.env.NODE_MAIL,
+    pass: process.env.NODE_PASS,
+  },
 });
 
 // =====================
@@ -81,7 +80,7 @@ const createPost = async (req, res) => {
 // =====================
 const getAllPosts = async (req, res) => {
   try {
-    const { category, tag, page = 1, limit = 11 } = req.query;
+    const { category, tag, page = 1, limit = 12 } = req.query;
 
     const filter = { status: "published", isApproved: true };
     if (category) filter.category = category;
@@ -130,8 +129,9 @@ const getSinglePost = async (req, res) => {
     }
 
     // Use logged-in user ID or fall back to IP address for guests
-    const viewerId = req.user?.id || 
-      req.headers["x-forwarded-for"]?.split(",")[0].trim() || 
+    const viewerId =
+      req.user?.id ||
+      req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
       req.socket.remoteAddress;
 
     // Only count view if this viewer hasn't seen this post before
@@ -166,7 +166,9 @@ const updatePost = async (req, res) => {
     }
 
     if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res.status(403).send({ message: "You are not allowed to edit this post" });
+      return res
+        .status(403)
+        .send({ message: "You are not allowed to edit this post" });
     }
 
     const updateData = {
@@ -180,7 +182,10 @@ const updatePost = async (req, res) => {
       try {
         updateData.tags = JSON.parse(req.body.tags);
       } catch {
-        updateData.tags = req.body.tags.split(",").map((t) => t.trim()).filter(Boolean);
+        updateData.tags = req.body.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
       }
     }
 
@@ -205,12 +210,15 @@ const updatePost = async (req, res) => {
     );
 
     res.status(200).send({
-      message: "Post updated successfully, it will be reviewed by an admin before publishing",
+      message:
+        "Post updated successfully, it will be reviewed by an admin before publishing",
       data: updatedPost,
     });
   } catch (error) {
     console.log("UPDATE POST ERROR:", error.message);
-    res.status(500).send({ message: "Failed to update post", error: error.message });
+    res
+      .status(500)
+      .send({ message: "Failed to update post", error: error.message });
   }
 };
 
@@ -233,7 +241,7 @@ const approvePost = async (req, res) => {
         approvedAt: new Date(),
         status: "published",
       },
-      { new: true }
+      { new: true },
     ).populate("author", "firstName lastName email");
 
     if (!post) {
@@ -297,7 +305,7 @@ const rejectPost = async (req, res) => {
     const post = await PostModel.findOneAndUpdate(
       { slug },
       { status: "rejected", isApproved: false },
-      { new: true }
+      { new: true },
     ).populate("author", "firstName lastName email");
 
     if (!post) {
@@ -362,7 +370,9 @@ const previewPost = async (req, res) => {
     const isAuthor = post.author._id.toString() === req.user.id;
 
     if (!isAdmin && !isAuthor) {
-      return res.status(403).send({ message: "You are not allowed to preview this post" });
+      return res
+        .status(403)
+        .send({ message: "You are not allowed to preview this post" });
     }
 
     res.status(200).send({ message: "Post fetched successfully", data: post });
@@ -378,7 +388,9 @@ const previewPost = async (req, res) => {
 const getPendingPosts = async (req, res) => {
   try {
     if (req.user.roles !== "admin") {
-      return res.status(403).send({ message: "Only admins can view pending posts" });
+      return res
+        .status(403)
+        .send({ message: "Only admins can view pending posts" });
     }
 
     const posts = await PostModel.find({ status: "pending" })
@@ -404,7 +416,10 @@ const likePost = async (req, res) => {
     const { slug } = req.params;
     const userId = req.user.id;
 
-    const post = await PostModel.findOne({ slug }).populate("author", "firstName lastName");
+    const post = await PostModel.findOne({ slug }).populate(
+      "author",
+      "firstName lastName",
+    );
 
     if (!post) {
       return res.status(404).send({ message: "Post not found" });
@@ -462,7 +477,9 @@ const sharePost = async (req, res) => {
     post.shares += 1;
     await post.save();
 
-    res.status(200).send({ message: "Post shared successfully", totalShares: post.shares });
+    res
+      .status(200)
+      .send({ message: "Post shared successfully", totalShares: post.shares });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to share post" });
@@ -478,7 +495,10 @@ const addComment = async (req, res) => {
     const { text } = req.body;
     const userId = req.user.id;
 
-    const post = await PostModel.findOne({ slug }).populate("author", "firstName lastName");
+    const post = await PostModel.findOne({ slug }).populate(
+      "author",
+      "firstName lastName",
+    );
 
     if (!post) {
       return res.status(404).send({ message: "Post not found" });
@@ -514,6 +534,46 @@ const addComment = async (req, res) => {
 };
 
 // =====================
+// LIKE / UNLIKE A COMMENT
+// =====================
+const likeComment = async (req, res) => {
+  try {
+    const { slug, commentId } = req.params;
+    const userId = req.user.id;
+
+    const post = await PostModel.findOne({ slug });
+
+    if (!post) {
+      return res.status(404).send({ message: "Post not found" });
+    }
+
+    const comment = post.comments.id(commentId);
+
+    if (!comment) {
+      return res.status(404).send({ message: "Comment not found" });
+    }
+
+    const alreadyLiked = comment.likes.includes(userId);
+
+    if (alreadyLiked) {
+      comment.likes = comment.likes.filter((id) => id.toString() !== userId);
+    } else {
+      comment.likes.push(userId);
+    }
+
+    await post.save();
+
+    res.status(200).send({
+      message: alreadyLiked ? "Comment unliked" : "Comment liked",
+      totalLikes: comment.likes.length,
+    });
+  } catch (error) {
+    console.log("LIKE COMMENT ERROR:", error.message);
+    res.status(500).send({ message: "Failed to like/unlike comment" });
+  }
+};
+
+// =====================
 // DELETE A COMMENT
 // =====================
 const deleteComment = async (req, res) => {
@@ -529,7 +589,9 @@ const deleteComment = async (req, res) => {
     if (!comment) return res.status(404).send({ message: "Comment not found" });
 
     if (comment.user.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res.status(403).send({ message: "You are not allowed to delete this comment" });
+      return res
+        .status(403)
+        .send({ message: "You are not allowed to delete this comment" });
     }
 
     comment.deleteOne();
@@ -563,7 +625,9 @@ const editComment = async (req, res) => {
     if (!comment) return res.status(404).send({ message: "Comment not found" });
 
     if (comment.user.toString() !== req.user.id) {
-      return res.status(403).send({ message: "You are not allowed to edit this comment" });
+      return res
+        .status(403)
+        .send({ message: "You are not allowed to edit this comment" });
     }
 
     comment.text = text.trim();
@@ -589,7 +653,9 @@ const deletePost = async (req, res) => {
     if (!post) return res.status(404).send({ message: "Post not found" });
 
     if (post.author.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res.status(403).send({ message: "You are not allowed to delete this post" });
+      return res
+        .status(403)
+        .send({ message: "You are not allowed to delete this post" });
     }
 
     await PostModel.findByIdAndDelete(post._id);
@@ -597,7 +663,9 @@ const deletePost = async (req, res) => {
     res.status(200).send({ message: "Post deleted successfully" });
   } catch (error) {
     console.log("DELETE POST ERROR:", error.message);
-    res.status(500).send({ message: "Failed to delete post", error: error.message });
+    res
+      .status(500)
+      .send({ message: "Failed to delete post", error: error.message });
   }
 };
 
@@ -608,7 +676,8 @@ const searchPosts = async (req, res) => {
   try {
     const { q } = req.query;
 
-    if (!q) return res.status(400).send({ message: "Please provide a search term" });
+    if (!q)
+      return res.status(400).send({ message: "Please provide a search term" });
 
     const posts = await PostModel.find({
       status: "published",
@@ -622,7 +691,9 @@ const searchPosts = async (req, res) => {
       .populate("author", "firstName lastName")
       .sort({ createdAt: -1 });
 
-    res.status(200).send({ message: "Search results", total: posts.length, data: posts });
+    res
+      .status(200)
+      .send({ message: "Search results", total: posts.length, data: posts });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Search failed" });
@@ -634,13 +705,23 @@ const searchPosts = async (req, res) => {
 // =====================
 const getMyPosts = async (req, res) => {
   try {
-    const posts = await PostModel.find({ author: req.user.id }).sort({ createdAt: -1 });
+    const posts = await PostModel.find({ author: req.user.id }).sort({
+      createdAt: -1,
+    });
 
     if (posts.length === 0) {
-      return res.status(404).send({ message: "You have not created any posts yet" });
+      return res
+        .status(404)
+        .send({ message: "You have not created any posts yet" });
     }
 
-    res.status(200).send({ message: "Your posts fetched successfully", total: posts.length, data: posts });
+    res
+      .status(200)
+      .send({
+        message: "Your posts fetched successfully",
+        total: posts.length,
+        data: posts,
+      });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to fetch your posts" });
@@ -652,12 +733,17 @@ const getMyPosts = async (req, res) => {
 // =====================
 const getTrendingPosts = async (req, res) => {
   try {
-    const posts = await PostModel.find({ status: "published", isApproved: true })
+    const posts = await PostModel.find({
+      status: "published",
+      isApproved: true,
+    })
       .populate("author", "firstName lastName")
       .sort({ views: -1 })
       .limit(10);
 
-    res.status(200).send({ message: "Trending posts fetched successfully", data: posts });
+    res
+      .status(200)
+      .send({ message: "Trending posts fetched successfully", data: posts });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to fetch trending posts" });
@@ -674,9 +760,16 @@ const getAdminStats = async (req, res) => {
     }
 
     const [
-      totalPosts, totalUsers, totalComments,
-      pendingPosts, publishedPosts, draftPosts, rejectedPosts,
-      categoryBreakdown, recentPosts, recentUsers,
+      totalPosts,
+      totalUsers,
+      totalComments,
+      pendingPosts,
+      publishedPosts,
+      draftPosts,
+      rejectedPosts,
+      categoryBreakdown,
+      recentPosts,
+      recentUsers,
     ] = await Promise.all([
       PostModel.countDocuments(),
       UserModel.countDocuments(),
@@ -692,20 +785,32 @@ const getAdminStats = async (req, res) => {
         { $group: { _id: "$category", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
-      PostModel.find().populate("author", "firstName lastName").sort({ createdAt: -1 }).limit(5).select("title status category createdAt author"),
-      UserModel.find().sort({ createdAt: -1 }).limit(5).select("firstName lastName email roles createdAt"),
+      PostModel.find()
+        .populate("author", "firstName lastName")
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("title status category createdAt author"),
+      UserModel.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("firstName lastName email roles createdAt"),
     ]);
 
     res.status(200).send({
       message: "Admin stats fetched successfully",
       data: {
         totals: {
-          posts: totalPosts, users: totalUsers,
+          posts: totalPosts,
+          users: totalUsers,
           comments: totalComments[0]?.total || 0,
-          pending: pendingPosts, published: publishedPosts,
-          drafts: draftPosts, rejected: rejectedPosts,
+          pending: pendingPosts,
+          published: publishedPosts,
+          drafts: draftPosts,
+          rejected: rejectedPosts,
         },
-        categoryBreakdown, recentPosts, recentUsers,
+        categoryBreakdown,
+        recentPosts,
+        recentUsers,
       },
     });
   } catch (error) {
@@ -719,7 +824,8 @@ const getAdminStats = async (req, res) => {
 // =====================
 const adminGetAllPosts = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
+    if (req.user.roles !== "admin")
+      return res.status(403).send({ message: "Access denied" });
 
     const { page = 1, limit = 15, search, category, status } = req.query;
     const skip = (page - 1) * limit;
@@ -735,11 +841,21 @@ const adminGetAllPosts = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit))
-        .select("title category status views likes comments shares createdAt author slug image"),
+        .select(
+          "title category status views likes comments shares createdAt author slug image",
+        ),
       PostModel.countDocuments(filter),
     ]);
 
-    res.status(200).send({ message: "Posts fetched successfully", total, page: Number(page), totalPages: Math.ceil(total / limit), data: posts });
+    res
+      .status(200)
+      .send({
+        message: "Posts fetched successfully",
+        total,
+        page: Number(page),
+        totalPages: Math.ceil(total / limit),
+        data: posts,
+      });
   } catch (error) {
     console.log("ADMIN GET ALL POSTS ERROR:", error.message);
     res.status(500).send({ message: "Failed to fetch posts" });
@@ -751,7 +867,8 @@ const adminGetAllPosts = async (req, res) => {
 // =====================
 const adminDeletePost = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
+    if (req.user.roles !== "admin")
+      return res.status(403).send({ message: "Access denied" });
 
     const post = await PostModel.findOne({ slug: req.params.slug });
     if (!post) return res.status(404).send({ message: "Post not found" });
@@ -769,7 +886,8 @@ const adminDeletePost = async (req, res) => {
 // =====================
 const adminGetAllComments = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
+    if (req.user.roles !== "admin")
+      return res.status(403).send({ message: "Access denied" });
 
     const { page = 1, limit = 20, search } = req.query;
     const skip = (page - 1) * Number(limit);
@@ -782,31 +900,58 @@ const adminGetAllComments = async (req, res) => {
     for (const post of posts) {
       for (const comment of post.comments) {
         allComments.push({
-          postId: post._id, postTitle: post.title, postSlug: post.slug,
-          comment: { _id: comment._id, text: comment.text, editedAt: comment.editedAt, createdAt: comment.createdAt },
-          commenter: comment.user ? { _id: comment.user._id, firstName: comment.user.firstName, lastName: comment.user.lastName, email: comment.user.email } : null,
+          postId: post._id,
+          postTitle: post.title,
+          postSlug: post.slug,
+          comment: {
+            _id: comment._id,
+            text: comment.text,
+            editedAt: comment.editedAt,
+            createdAt: comment.createdAt,
+          },
+          commenter: comment.user
+            ? {
+                _id: comment.user._id,
+                firstName: comment.user.firstName,
+                lastName: comment.user.lastName,
+                email: comment.user.email,
+              }
+            : null,
         });
       }
     }
 
-    allComments.sort((a, b) => new Date(b.comment.createdAt) - new Date(a.comment.createdAt));
+    allComments.sort(
+      (a, b) => new Date(b.comment.createdAt) - new Date(a.comment.createdAt),
+    );
 
     if (search) {
       const term = search.toLowerCase();
-      allComments = allComments.filter((item) =>
-        item.comment.text?.toLowerCase().includes(term) ||
-        item.commenter?.firstName?.toLowerCase().includes(term) ||
-        item.commenter?.lastName?.toLowerCase().includes(term)
+      allComments = allComments.filter(
+        (item) =>
+          item.comment.text?.toLowerCase().includes(term) ||
+          item.commenter?.firstName?.toLowerCase().includes(term) ||
+          item.commenter?.lastName?.toLowerCase().includes(term),
       );
     }
 
     const total = allComments.length;
     const paginated = allComments.slice(skip, skip + Number(limit));
 
-    res.status(200).send({ message: "Comments fetched successfully", total, page: Number(page), totalPages: Math.ceil(total / Number(limit)), data: paginated });
+    res
+      .status(200)
+      .send({
+        message: "Comments fetched successfully",
+        total,
+        page: Number(page),
+        totalPages: Math.ceil(total / Number(limit)),
+        data: paginated,
+      });
   } catch (error) {
     console.log("ADMIN GET ALL COMMENTS ERROR:", error.message);
-    res.status(500).send({ message: "Failed to fetch comments", error: error.message });
+    res
+      .status(500)
+      .send({ message: "Failed to fetch comments", error: error.message });
   }
 };
 
@@ -815,7 +960,8 @@ const adminGetAllComments = async (req, res) => {
 // =====================
 const adminDeleteComment = async (req, res) => {
   try {
-    if (req.user.roles !== "admin") return res.status(403).send({ message: "Access denied" });
+    if (req.user.roles !== "admin")
+      return res.status(403).send({ message: "Access denied" });
 
     const { slug, commentId } = req.params;
 
@@ -836,9 +982,27 @@ const adminDeleteComment = async (req, res) => {
 };
 
 module.exports = {
-  createPost, getAllPosts, getSinglePost, updatePost, deletePost,
-  approvePost, previewPost, rejectPost, getPendingPosts,
-  likePost, sharePost, addComment, deleteComment, editComment,
-  searchPosts, getTrendingPosts, getMyPosts,
-  getAdminStats, adminGetAllPosts, adminDeletePost, adminGetAllComments, adminDeleteComment,
+  createPost,
+  getAllPosts,
+  getSinglePost,
+  updatePost,
+  deletePost,
+  approvePost,
+  previewPost,
+  rejectPost,
+  getPendingPosts,
+  likePost,
+  sharePost,
+  addComment,
+  likeComment,
+  deleteComment,
+  editComment,
+  searchPosts,
+  getTrendingPosts,
+  getMyPosts,
+  getAdminStats,
+  adminGetAllPosts,
+  adminDeletePost,
+  adminGetAllComments,
+  adminDeleteComment,
 };

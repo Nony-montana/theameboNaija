@@ -4,6 +4,7 @@ const CommentSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
   text: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
   editedAt: { type: Date, default: null },
 });
 

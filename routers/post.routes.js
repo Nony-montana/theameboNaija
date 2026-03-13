@@ -33,6 +33,7 @@ const {
   adminDeletePost,
   adminGetAllComments,
   adminDeleteComment,
+  likeComment,
 } = require("../controllers/post.controller");
 
 // =====================
@@ -67,6 +68,7 @@ router.delete("/posts/:slug", verifyUser, deletePost);
 router.post("/posts/:slug/like", verifyUser, likePost);
 router.post("/posts/:slug/share", verifyUser, sharePost);
 router.post("/posts/:slug/comment", verifyUser, addComment);
+router.post("/posts/:slug/comment/:commentId/like", verifyUser, likeComment);
 router.delete("/posts/:slug/comment/:commentId", verifyUser, deleteComment);
 router.put("/posts/:slug/comment/:commentId", verifyUser, editComment);
 
