@@ -559,6 +559,18 @@ const likeComment = async (req, res) => {
       comment.likes = comment.likes.filter((id) => id.toString() !== userId);
     } else {
       comment.likes.push(userId);
+
+      // Notify comment owner — but not if they liked their own comment
+      if (comment.user.toString() !== userId) {
+        await NotificationModel.create({
+          recipient: comment.user,
+          sender: userId,
+          type: "like",
+          message: "liked your comment",
+          postSlug: post.slug,
+          postTitle: post.title,
+        });
+      }
     }
 
     await post.save();
