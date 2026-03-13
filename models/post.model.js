@@ -19,7 +19,7 @@ const PostSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["news", "gist", "gossip", "entertainment", "lifestyle", "sports"],
+      enum: ["news", "gist", "gossip", "entertainment", "lifestyle", "sports","tech"],
       required: true,
     },
     image: { type: String },
