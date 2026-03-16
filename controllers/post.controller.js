@@ -62,6 +62,47 @@ const createPost = async (req, res) => {
       author: req.user.id,
     });
 
+    // Send email to admin when a post is submitted for review
+    if (post.status === "pending") {
+      try {
+        const adminEmail = process.env.ADMIN_EMAIL;
+        await transporter.sendMail({
+          from: `"AmeboNaija" <${process.env.EMAIL_USER}>`,
+          to: adminEmail,
+          subject: "📝 New Post Pending Review",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #16a34a;">New Post Pending Review</h2>
+              <p>A new post has been submitted and is waiting for your approval.</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                <tr>
+                  <td style="padding: 8px; font-weight: bold; color: #555;">Title</td>
+                  <td style="padding: 8px;">${post.title}</td>
+                </tr>
+                <tr style="background: #f9f9f9;">
+                  <td style="padding: 8px; font-weight: bold; color: #555;">Category</td>
+                  <td style="padding: 8px; text-transform: capitalize;">${post.category}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px; font-weight: bold; color: #555;">Submitted</td>
+                  <td style="padding: 8px;">${new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</td>
+                </tr>
+              </table>
+              
+                href="${process.env.FRONTEND_URL}/admin/dashboard"
+                style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;"
+              >
+                Review Post →
+              </a>
+              <p style="color: #999; font-size: 12px; margin-top: 24px;">AmeboNaija Admin</p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.log("Admin email failed:", emailError.message);
+      }
+    }
+
     res.status(201).send({
       message: "Post created successfully",
       data: post,
@@ -318,7 +359,7 @@ const rejectPost = async (req, res) => {
         recipient: post.author._id,
         sender: req.user.id,
         type: "rejected",
-        message: `❌ Your post was not approved. Please review and resubmit.`,
+        message: `Your post was not approved. Please review and resubmit.`,
         postSlug: post.slug,
         postTitle: post.title,
       });
@@ -439,7 +480,7 @@ const likePost = async (req, res) => {
             recipient: post.author._id,
             sender: userId,
             type: "like",
-            message: `❤️ Someone liked your post!`,
+            message: `liked your post!`,
             postSlug: post.slug,
             postTitle: post.title,
           });
@@ -514,7 +555,7 @@ const addComment = async (req, res) => {
           recipient: post.author._id,
           sender: userId,
           type: "comment",
-          message: `💬 Someone commented on your post!`,
+          message: `commented on your post!`,
           postSlug: post.slug,
           postTitle: post.title,
         });
@@ -566,7 +607,7 @@ const likeComment = async (req, res) => {
           recipient: comment.user,
           sender: userId,
           type: "like",
-          message: "liked your comment",
+          message: "liked your comment!",
           postSlug: post.slug,
           postTitle: post.title,
         });
