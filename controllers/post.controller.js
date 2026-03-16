@@ -89,7 +89,7 @@ const createPost = async (req, res) => {
           await transporter.sendMail({
             from: process.env.NODE_MAIL,
             to: adminEmails,
-            subject: "📝 New Post Pending Review — AmeboNaija",
+            subject: "New Post Pending Review — AmeboNaija",
             html: emailContent,
           });
         }
