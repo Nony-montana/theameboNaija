@@ -65,44 +65,38 @@ const createPost = async (req, res) => {
     // Send email to admin when a post is submitted for review
     if (post.status === "pending") {
       try {
-        const adminEmail = process.env.ADMIN_EMAIL;
-        await transporter.sendMail({
-          from: `"AmeboNaija" <${process.env.EMAIL_USER}>`,
-          to: adminEmail,
-          subject: "📝 New Post Pending Review",
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #16a34a;">New Post Pending Review</h2>
-              <p>A new post has been submitted and is waiting for your approval.</p>
-              <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-                <tr>
-                  <td style="padding: 8px; font-weight: bold; color: #555;">Title</td>
-                  <td style="padding: 8px;">${post.title}</td>
-                </tr>
-                <tr style="background: #f9f9f9;">
-                  <td style="padding: 8px; font-weight: bold; color: #555;">Category</td>
-                  <td style="padding: 8px; text-transform: capitalize;">${post.category}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px; font-weight: bold; color: #555;">Submitted</td>
-                  <td style="padding: 8px;">${new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</td>
-                </tr>
-              </table>
-              
-                href="${process.env.FRONTEND_URL}/admin/dashboard"
-                style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;"
-              >
-                Review Post →
-              </a>
-              <p style="color: #999; font-size: 12px; margin-top: 24px;">AmeboNaija Admin</p>
-            </div>
-          `,
-        });
+        const admins = await UserModel.find({ roles: "admin" }, "email");
+        const adminEmails = admins.map((a) => a.email);
+
+        if (adminEmails.length > 0) {
+          const author = await UserModel.findById(
+            req.user.id,
+            "firstName lastName",
+          );
+
+          const emailContent = await mailSender("pendingPostMail.ejs", {
+            postTitle: post.title,
+            category: post.category,
+            authorName: `${author.firstName} ${author.lastName}`,
+            submittedAt: new Date().toLocaleDateString("en-NG", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            }),
+            reviewUrl: `${process.env.FRONTEND_URL}/admin/dashboard`,
+          });
+
+          await transporter.sendMail({
+            from: process.env.NODE_MAIL,
+            to: adminEmails,
+            subject: "📝 New Post Pending Review — AmeboNaija",
+            html: emailContent,
+          });
+        }
       } catch (emailError) {
         console.log("Admin email failed:", emailError.message);
       }
     }
-
     res.status(201).send({
       message: "Post created successfully",
       data: post,
@@ -768,13 +762,11 @@ const getMyPosts = async (req, res) => {
         .send({ message: "You have not created any posts yet" });
     }
 
-    res
-      .status(200)
-      .send({
-        message: "Your posts fetched successfully",
-        total: posts.length,
-        data: posts,
-      });
+    res.status(200).send({
+      message: "Your posts fetched successfully",
+      total: posts.length,
+      data: posts,
+    });
   } catch (error) {
     console.log(error);
     res.status(500).send({ message: "Failed to fetch your posts" });
@@ -900,15 +892,13 @@ const adminGetAllPosts = async (req, res) => {
       PostModel.countDocuments(filter),
     ]);
 
-    res
-      .status(200)
-      .send({
-        message: "Posts fetched successfully",
-        total,
-        page: Number(page),
-        totalPages: Math.ceil(total / limit),
-        data: posts,
-      });
+    res.status(200).send({
+      message: "Posts fetched successfully",
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / limit),
+      data: posts,
+    });
   } catch (error) {
     console.log("ADMIN GET ALL POSTS ERROR:", error.message);
     res.status(500).send({ message: "Failed to fetch posts" });
@@ -991,15 +981,13 @@ const adminGetAllComments = async (req, res) => {
     const total = allComments.length;
     const paginated = allComments.slice(skip, skip + Number(limit));
 
-    res
-      .status(200)
-      .send({
-        message: "Comments fetched successfully",
-        total,
-        page: Number(page),
-        totalPages: Math.ceil(total / Number(limit)),
-        data: paginated,
-      });
+    res.status(200).send({
+      message: "Comments fetched successfully",
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+      data: paginated,
+    });
   } catch (error) {
     console.log("ADMIN GET ALL COMMENTS ERROR:", error.message);
     res
