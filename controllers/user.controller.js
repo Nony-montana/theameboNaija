@@ -67,20 +67,19 @@ const login = async (req, res) => {
   try {
     const isUser = await UserModel.findOne({ email }).select("+password");
     if (!isUser) {
-      res.status(404).send({
-        message: "Invalid credentials",
-      });
-
-      return;
+      return res.status(404).send({ message: "Invalid credentials" });
     }
 
     const isMatch = await bcrypt.compare(password, isUser.password);
     if (!isMatch) {
-      res.status(404).send({
-        message: "Invalid credentials",
-      });
+      return res.status(404).send({ message: "Invalid credentials" });
+    }
 
-      return;
+    // Block deactivated accounts
+    if (isUser.isActive === false) {
+      return res.status(403).send({
+        message: "Your account has been deactivated. Please contact support.",
+      });
     }
 
     const token = await jwt.sign(
@@ -88,10 +87,11 @@ const login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "5h" },
     );
+
     res.status(200).send({
       message: "User logged in successfully",
       data: {
-        id:isUser._id,
+        id: isUser._id,
         email: isUser.email,
         roles: isUser.roles,
         firstName: isUser.firstName,
@@ -102,12 +102,9 @@ const login = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(404).send({
-      message: "Invalid credentials",
-    });
+    res.status(404).send({ message: "Invalid credentials" });
   }
 };
-
 const getUser = async (req, res) => {
   const { id } = req.params;
   try {
