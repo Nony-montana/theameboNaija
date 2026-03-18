@@ -96,6 +96,7 @@ const login = async (req, res) => {
         roles: isUser.roles,
         firstName: isUser.firstName,
         lastName: isUser.lastName,
+        createdAt: isUser.createdAt,
       },
       token,
     });
