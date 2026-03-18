@@ -132,7 +132,7 @@ const verifyUser = async (req, res, next) => {
             return res.status(401).send({ message: "User Unauthorized" });
         }
 
-        // Check if account is deactivated
+        // Check if account is  deactivated
         const user = await UserModel.findById(decoded.id);
         if (!user || user.isActive === false) {
             return res.status(403).send({ message: "Your account has been deactivated. Contact support." });
