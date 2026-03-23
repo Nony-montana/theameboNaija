@@ -1,18 +1,11 @@
 const mongoose = require("mongoose");
 
-const ReplySchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
-  text: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-});
-
 const CommentSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
   text: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
-  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
   editedAt: { type: Date, default: null },
-  replies: [ReplySchema], // ← added
 });
 
 const PostSchema = new mongoose.Schema(
@@ -26,7 +19,7 @@ const PostSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["news", "gist", "gossip", "entertainment", "lifestyle", "sports", "tech"],
+      enum: ["news", "gist", "gossip", "entertainment", "lifestyle", "sports","tech"],
       required: true,
     },
     image: { type: String },
@@ -43,7 +36,7 @@ const PostSchema = new mongoose.Schema(
       default: "draft",
     },
     views: { type: Number, default: 0 },
-    viewers: [{ type: String }],
+     viewers: [{ type: String }],
     slug: { type: String, unique: true },
   },
   { timestamps: true },

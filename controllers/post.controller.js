@@ -157,8 +157,7 @@ const getSinglePost = async (req, res) => {
       isApproved: true,
     })
       .populate("author", "firstName lastName")
-      .populate("comments.user", "firstName lastName")
-      .populate("comments.replies.user", "firstName lastName");
+      .populate("comments.user", "firstName lastName");
 
     if (!post) {
       return res.status(404).send({ message: "Post not found" });
@@ -284,6 +283,7 @@ const approvePost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
+    // Create notification for the author
     try {
       await NotificationModel.create({
         recipient: post.author._id,
@@ -297,6 +297,7 @@ const approvePost = async (req, res) => {
       console.log("Approval notification failed:", notifError.message);
     }
 
+    // Send approval email
     try {
       const emailContent = await mailSender("approvedMail.ejs", {
         firstName: post.author.firstName,
@@ -346,6 +347,7 @@ const rejectPost = async (req, res) => {
       return res.status(404).send({ message: "Post not found" });
     }
 
+    // Create notification for the author
     try {
       await NotificationModel.create({
         recipient: post.author._id,
@@ -359,6 +361,7 @@ const rejectPost = async (req, res) => {
       console.log("Rejection notification failed:", notifError.message);
     }
 
+    // Send rejection email
     try {
       const emailContent = await mailSender("rejectedMail.ejs", {
         firstName: post.author.firstName,
@@ -464,6 +467,7 @@ const likePost = async (req, res) => {
     } else {
       post.likes.push(userId);
 
+      // Notify the author only when liking (not unliking), and not if they like their own post
       if (post.author._id.toString() !== userId) {
         try {
           await NotificationModel.create({
@@ -538,6 +542,7 @@ const addComment = async (req, res) => {
     post.comments.push({ user: userId, text });
     await post.save();
 
+    // Notify the author, but not if they comment on their own post
     if (post.author._id.toString() !== userId) {
       try {
         await NotificationModel.create({
@@ -590,6 +595,7 @@ const likeComment = async (req, res) => {
     } else {
       comment.likes.push(userId);
 
+      // Notify comment owner — but not if they liked their own comment
       if (comment.user.toString() !== userId) {
         await NotificationModel.create({
           recipient: comment.user,
@@ -611,84 +617,6 @@ const likeComment = async (req, res) => {
   } catch (error) {
     console.log("LIKE COMMENT ERROR:", error.message);
     res.status(500).send({ message: "Failed to like/unlike comment" });
-  }
-};
-
-// =====================
-// ADD A REPLY
-// =====================
-const addReply = async (req, res) => {
-  try {
-    const { slug, commentId } = req.params;
-    const { text } = req.body;
-    const userId = req.user.id;
-
-    if (!text || !text.trim()) {
-      return res.status(400).send({ message: "Reply text is required" });
-    }
-
-    const post = await PostModel.findOne({ slug });
-    if (!post) return res.status(404).send({ message: "Post not found" });
-
-    const comment = post.comments.id(commentId);
-    if (!comment) return res.status(404).send({ message: "Comment not found" });
-
-    comment.replies.push({ user: userId, text: text.trim() });
-    await post.save();
-
-    // Notify comment owner — but not if they reply to their own comment
-    if (comment.user.toString() !== userId) {
-      try {
-        await NotificationModel.create({
-          recipient: comment.user,
-          sender: userId,
-          type: "comment",
-          message: "replied to your comment!",
-          postSlug: post.slug,
-          postTitle: post.title,
-        });
-      } catch (notifError) {
-        console.log("Reply notification failed:", notifError.message);
-      }
-    }
-
-    res.status(201).send({
-      message: "Reply added successfully",
-      totalReplies: comment.replies.length,
-    });
-  } catch (error) {
-    console.log("ADD REPLY ERROR:", error.message);
-    res.status(500).send({ message: "Failed to add reply" });
-  }
-};
-
-// =====================
-// DELETE A REPLY
-// =====================
-const deleteReply = async (req, res) => {
-  try {
-    const { slug, commentId, replyId } = req.params;
-
-    const post = await PostModel.findOne({ slug });
-    if (!post) return res.status(404).send({ message: "Post not found" });
-
-    const comment = post.comments.id(commentId);
-    if (!comment) return res.status(404).send({ message: "Comment not found" });
-
-    const reply = comment.replies.id(replyId);
-    if (!reply) return res.status(404).send({ message: "Reply not found" });
-
-    if (reply.user.toString() !== req.user.id && req.user.roles !== "admin") {
-      return res.status(403).send({ message: "You are not allowed to delete this reply" });
-    }
-
-    reply.deleteOne();
-    await post.save();
-
-    res.status(200).send({ message: "Reply deleted successfully" });
-  } catch (error) {
-    console.log("DELETE REPLY ERROR:", error.message);
-    res.status(500).send({ message: "Failed to delete reply" });
   }
 };
 
@@ -1108,8 +1036,6 @@ module.exports = {
   sharePost,
   addComment,
   likeComment,
-  addReply,
-  deleteReply,
   deleteComment,
   editComment,
   searchPosts,
